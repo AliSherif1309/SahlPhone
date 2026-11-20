@@ -137,4 +137,5 @@
     <string name="flip_setting">Turn phone face-down to silence ringing</string>
     <string name="prayer_callback_setting">After prayer, remind me of calls I missed</string>
     <string name="weekly_setting">Weekly call summary (Saturday)</string>
+    <string name="need_fullscreen">Allow Sahl Phone to show incoming calls on the full screen.</string>
 </resources>

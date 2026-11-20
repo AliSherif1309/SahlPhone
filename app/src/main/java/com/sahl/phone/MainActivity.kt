@@ -112,6 +112,10 @@ class MainActivity : SahlActivity() {
         when {
             !Dialer.isDefault(this) -> { msg = R.string.make_default; btn = R.string.set_default; go = { requestDefault() } }
             !granted() -> { msg = R.string.need_permission; btn = R.string.allow; go = { askPermissions() } }
+            Build.VERSION.SDK_INT >= 34 && !getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent() -> {
+                msg = R.string.need_fullscreen; btn = R.string.allow
+                go = { try { startActivity(Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:$packageName"))) } catch (e: Exception) { } }
+            }
             else -> { banner.visibility = View.GONE; return }
         }
         banner.visibility = View.VISIBLE

@@ -99,7 +99,9 @@ class SahlInCallService : InCallService() {
             FlipSilence.start(this)
         }
         Notifs.update(this)
-        if (call.st() != Call.STATE_RINGING) openScreen(this)
+        // Always bring up the Sahl call screen — Android lets the default phone app do this,
+        // so incoming calls appear on their own (screen off or on), not only as a notification.
+        openScreen(this)
         CallManager.changed()
     }
 
@@ -136,7 +138,7 @@ class SahlInCallService : InCallService() {
 /** Incoming / ongoing call notifications (full-screen on the lock screen). */
 object Notifs {
     private const val ID = 77
-    private const val CH_IN = "incoming"
+    private const val CH_IN = "calls_ring"   // new channel id so the high-priority settings apply
     private const val CH_ON = "ongoing"
 
     private fun pi(c: Context, code: Int, action: String) = PendingIntent.getBroadcast(c, code,
@@ -149,7 +151,10 @@ object Notifs {
         val c = Sahl.wrap(ctx)
         nm.createNotificationChannel(NotificationChannel(CH_IN, c.getString(R.string.incoming), NotificationManager.IMPORTANCE_HIGH).apply {
             setSound(null, null as AudioAttributes?)   // Android plays the ringtone itself
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setBypassDnd(false)
         })
+        try { nm.deleteNotificationChannel("incoming") } catch (e: Exception) { }
         nm.createNotificationChannel(NotificationChannel(CH_ON, c.getString(R.string.ongoing), NotificationManager.IMPORTANCE_LOW))
         val num = call.number()
         val who = Lookup.caller(ctx, num).name ?: num.ifBlank { c.getString(R.string.private_number) }
@@ -159,6 +164,7 @@ object Notifs {
         val b = Notification.Builder(ctx, if (ringing) CH_IN else CH_ON)
             .setSmallIcon(R.drawable.ic_call).setOngoing(true).setContentIntent(open)
             .setCategory(Notification.CATEGORY_CALL).setContentTitle(who)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentText(c.getString(if (ringing) R.string.incoming else R.string.ongoing))
         val decline = pi(ctx, 2, "decline"); val answer = pi(ctx, 3, "answer"); val hang = pi(ctx, 4, "end")
         if (ringing) b.setFullScreenIntent(open, true)
