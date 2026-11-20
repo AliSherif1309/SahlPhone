@@ -38,11 +38,11 @@ class ReminderReceiver : BroadcastReceiver() {
         val name = intent.getStringExtra("name")
         val c = Sahl.wrap(ctx)
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
-        nm.createNotificationChannel(NotificationChannel("reminders", c.getString(R.string.reminders), NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(Sahl.chimeChannel(ctx, "reminders_chime", c.getString(R.string.reminders)))
         val call = PendingIntent.getActivity(ctx, number.hashCode(),
             Intent(ctx, CallActivity::class.java).putExtra("number", number).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        nm.notify(20_000 + (number.hashCode() and 0xffff), Notification.Builder(ctx, "reminders")
+        nm.notify(20_000 + (number.hashCode() and 0xffff), Notification.Builder(ctx, "reminders_chime")
             .setSmallIcon(R.drawable.ic_bell)
             .setContentTitle(c.getString(R.string.call_back_title, name ?: number))
             .setContentText(c.getString(R.string.call_back_text))

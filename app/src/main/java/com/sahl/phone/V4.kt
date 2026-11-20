@@ -104,9 +104,9 @@ class PrayerMissedReceiver : BroadcastReceiver() {
         }
         val c = Sahl.wrap(ctx)
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
-        nm.createNotificationChannel(NotificationChannel("reminders", c.getString(R.string.reminders), NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(Sahl.chimeChannel(ctx, "reminders_chime", c.getString(R.string.reminders)))
         val names = numbers.values.map { Lookup.caller(ctx, it).name ?: it }
-        val b = Notification.Builder(ctx, "reminders").setSmallIcon(R.drawable.ic_bell)
+        val b = Notification.Builder(ctx, "reminders_chime").setSmallIcon(R.drawable.ic_bell)
             .setContentTitle(c.getString(R.string.prayer_missed_title, list.length(), prayer))
             .setContentText(names.joinToString(", "))
             .setAutoCancel(true)

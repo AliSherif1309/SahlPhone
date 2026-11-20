@@ -80,6 +80,18 @@ object Sahl {
 
     fun countryCode(c: Context) = prefs(c).getString("cc", "974") ?: "974"
 
+    /** The Sahl chime — the shared notification sound of every Sahl app (res/raw/sahl_chime). */
+    fun chime(c: Context): Uri = Uri.parse("android.resource://${c.packageName}/raw/sahl_chime")
+
+    /** A notification channel that plays the Sahl chime. */
+    fun chimeChannel(c: Context, id: String, name: String, importance: Int = android.app.NotificationManager.IMPORTANCE_HIGH) =
+        android.app.NotificationChannel(id, name, importance).apply {
+            setSound(chime(c), android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+            enableVibration(true)
+        }
+
     /** Saves any crash so the app can show it on the next start (shared Sahl debug helper). */
     fun catchCrashes(c: Context) {
         val app = c.applicationContext
