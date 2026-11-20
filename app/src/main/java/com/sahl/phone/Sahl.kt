@@ -311,7 +311,7 @@ abstract class SahlActivity : Activity() {
     }
 
     /** Small gold section title. */
-    fun label(s: String) = text(s, 13f, col(R.color.gold), true).apply { setPadding(px(4), px(2), 0, px(8)) }
+    fun label(s: String) = text(s, 13f, col(R.color.emerald), true).apply { setPaddingRelative(px(4), px(2), 0, px(8)) }
 
     /** Calm avatar colour picked from the name. */
     fun avatarColor(name: String): Int {
