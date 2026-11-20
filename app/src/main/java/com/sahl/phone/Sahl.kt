@@ -253,9 +253,10 @@ abstract class SahlActivity : Activity() {
     fun systemBars(color: Int, lightIcons: Boolean) {
         window.statusBarColor = color
         window.navigationBarColor = color
+        val decor = window.decorView   // makes sure the window's decor exists before touching its insets
         if (Build.VERSION.SDK_INT >= 30) {
             val f = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-            window.insetsController?.setSystemBarsAppearance(if (lightIcons) f else 0, f)
+            try { decor.windowInsetsController?.setSystemBarsAppearance(if (lightIcons) f else 0, f) } catch (e: Exception) { }
         } else {
             var v = window.decorView.systemUiVisibility
             v = if (lightIcons) v or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR else v and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
