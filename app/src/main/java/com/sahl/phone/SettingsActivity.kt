@@ -59,6 +59,21 @@ class SettingsActivity : SahlActivity() {
         sw(R.string.prayer_allow_fav, "prayer_allow_fav", true)
         sw(R.string.prayer_auto_reply, "prayer_auto_reply", false)
 
+        // Call Guard (in Sahl Tools) and call notes
+        val gd = card(R.string.call_guard)
+        val gOn = Guard.installed(this) && Guard.active(this)
+        gd.addView(text(getString(when { !Guard.installed(this) -> R.string.guard_missing; gOn -> R.string.guard_on; else -> R.string.guard_off }), 13f,
+            if (gOn) col(R.color.emerald) else col(R.color.sub)).apply { setPadding(0, px(2), 0, px(6)) })
+        if (Guard.installed(this)) gd.addView(Button(this).apply {
+            text = getString(R.string.guard_settings); typeface = font
+            setOnClickListener { Guard.openSettings(this@SettingsActivity) }
+        })
+        gd.addView(Switch(this).apply {
+            text = getString(R.string.note_prompt_setting); typeface = font; setTextColor(col(R.color.text)); textSize = 15f
+            isChecked = p.getBoolean("note_prompt", true); setPadding(0, px(8), 0, px(4))
+            setOnCheckedChangeListener { _, on -> p.edit().putBoolean("note_prompt", on).apply() }
+        })
+
         // Quick replies
         val qr = card(R.string.quick_replies)
         val qrText = text(QuickReplies.list(this).joinToString("\n") { "• $it" }, 14f, col(R.color.sub))

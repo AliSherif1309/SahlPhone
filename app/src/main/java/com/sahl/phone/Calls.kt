@@ -94,6 +94,9 @@ class SahlInCallService : InCallService() {
     }
 
     override fun onCallRemoved(call: Call) {
+        // Answered call ended → offer a note; missed calls → refresh the widget
+        try { if (call.details.connectTimeMillis > 0) CallNotes.offer(this, call.number()) } catch (e: Exception) { }
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ MissedWidget.refresh(this) }, 1500)
         call.unregisterCallback(CallManager.callback)
         CallManager.calls.remove(call)
         Notifs.update(this)

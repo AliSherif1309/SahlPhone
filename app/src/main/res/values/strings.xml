@@ -99,4 +99,27 @@
     <string name="delete_history_q">Delete all calls with this number from recents?</string>
     <string name="note">Note</string>
     <string name="call_details">Call details</string>
+    <string name="warn_hidden">Hidden number</string>
+    <string name="warn_international">International · %1$s</string>
+    <string name="warn_new">Never called you before</string>
+    <string name="warn_seen">Called %1$d times before</string>
+    <string name="stopped">Blocked</string>
+    <string name="no_stopped">Call Guard hasn’t stopped any calls</string>
+    <string name="guard_settings">Call Guard settings</string>
+    <string name="call_guard">Call Guard</string>
+    <string name="guard_on">Call Guard in Sahl Tools is protecting you ✓</string>
+    <string name="guard_off">Call Guard is installed but not turned on — open it to enable</string>
+    <string name="guard_missing">Install Sahl Tools to block spam and hidden numbers.</string>
+    <string name="never_block">Never block this number</string>
+    <string name="allowed_done">Added to your allow list</string>
+    <string name="call_notes">Call notes</string>
+    <string name="call_note">Note for this call</string>
+    <string name="note_hint">What was it about?</string>
+    <string name="tap_to_note">Tap a call to add a note</string>
+    <string name="note_prompt_title">Call with %1$s ended</string>
+    <string name="note_prompt_text">Tap to add a note about this call</string>
+    <string name="note_prompt_setting">Offer to add a note after a call</string>
+    <string name="missed_widget">Sahl missed calls</string>
+    <string name="missed_today">%1$d missed today</string>
+    <string name="no_missed">No missed calls today ✓</string>
 </resources>

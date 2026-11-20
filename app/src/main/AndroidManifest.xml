@@ -22,6 +22,9 @@
     <queries>
         <provider android:authorities="com.sahl.contacts.union" />
         <provider android:authorities="com.sahl.adhan.union" />
+        <provider android:authorities="com.sahl.tools.union" />
+        <package android:name="com.sahl.tools" />
+        <intent><action android:name="com.sahl.tools.action.CALL_GUARD" /></intent>
         <package android:name="com.sahl.adhan" />
         <package android:name="com.sahl.contacts" />
         <intent><action android:name="android.intent.action.SENDTO" /><data android:scheme="smsto" /></intent>
@@ -68,6 +71,10 @@
 
         <receiver android:name=".CallActionReceiver" android:exported="false" />
         <receiver android:name=".ReminderReceiver" android:exported="false" />
+        <receiver android:name=".MissedWidget" android:exported="false" android:label="@string/missed_widget">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_missed_info" />
+        </receiver>
 
         <!-- Sahl Union: other Sahl apps place calls and read call history through these -->
         <activity android:name=".CallActivity" android:exported="true"

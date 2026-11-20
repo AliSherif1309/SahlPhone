@@ -117,15 +117,43 @@ class CallDetailActivity : SahlActivity() {
             row.addView(text(getString(label), 15f).apply { setPaddingRelative(px(14), 0, 0, 0) }, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(text(listOf(time(r.date), if (r.duration > 0) dur(r.duration) else "").filter { it.isNotEmpty() }.joinToString("  ·  "),
                 13f, col(R.color.sub)))
+            row.setOnClickListener { editNote(r.date) }
+            row.press(12f)
             card.addView(row)
+            CallNotes.get(this, number, r.date)?.let { n ->
+                card.addView(text(n, 14f, col(R.color.text)).apply {
+                    background = round(col(R.color.tonal), 12f); setPadding(px(12), px(8), px(12), px(8))
+                    setOnClickListener { editNote(r.date) }
+                }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(px(32), 0, 0, px(6)) })
+            }
         }
         if (rows.isEmpty()) card.addView(text(getString(R.string.no_recents), 14f, col(R.color.sub)))
+        else card.addView(text(getString(R.string.tap_to_note), 12f, col(R.color.sub)).apply { setPadding(0, px(8), 0, 0) })
+        if (intent.getBooleanExtra("addNote", false) && rows.isNotEmpty()) {
+            intent.removeExtra("addNote")
+            editNote((rows.firstOrNull { it.duration > 0 } ?: rows.first()).date)
+        }
         body.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(8) })
 
         body.addView(text(getString(R.string.block), 15f, col(R.color.danger)).apply {
             gravity = Gravity.CENTER; setPadding(0, px(14), 0, px(14))
-            setOnClickListener { toast(if (Data.block(this@CallDetailActivity, number)) R.string.blocked_done else R.string.make_default) }
+            setOnClickListener { toast(if (Guard.block(this@CallDetailActivity, number)) R.string.blocked_done else R.string.make_default) }
         }.press(16f), LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(16) })
+        if (Guard.installed(this)) body.addView(text(getString(R.string.never_block), 15f, col(R.color.emerald)).apply {
+            gravity = Gravity.CENTER; setPadding(0, px(14), 0, px(14))
+            setOnClickListener { if (Guard.allow(this@CallDetailActivity, number)) toast(R.string.allowed_done) }
+        }.press(16f))
+    }
+
+    /** Write or change the note for one call. */
+    private fun editNote(date: Long) {
+        val et = EditText(this).apply {
+            setText(CallNotes.get(this@CallDetailActivity, number, date) ?: ""); hint = getString(R.string.note_hint)
+            typeface = font; minLines = 3; setPadding(px(20), px(16), px(20), px(16))
+        }
+        android.app.AlertDialog.Builder(this).setTitle(R.string.call_note).setView(et)
+            .setPositiveButton(R.string.save) { _, _ -> CallNotes.set(this, number, date, et.text.toString()); load() }
+            .setNegativeButton(R.string.cancel, null).show()
     }
 
     private fun loc() = resources.configuration.locales[0]

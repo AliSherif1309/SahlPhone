@@ -32,6 +32,7 @@ class InCallActivity : SahlActivity() {
     private lateinit var factsTv: TextView
     private lateinit var noteTv: TextView
     private lateinit var prayerTv: TextView
+    private lateinit var warnTv: TextView
     private lateinit var avatarLetter: TextView
     private lateinit var avatarImg: ImageView
     private lateinit var avatarBox: FrameLayout
@@ -74,6 +75,8 @@ class InCallActivity : SahlActivity() {
         noteTv = pill("").apply { visibility = View.GONE; maxLines = 3 }
         root.addView(nameTv); root.addView(numberTv); root.addView(statusTv); root.addView(factsTv)
         root.addView(noteTv, LinearLayout.LayoutParams(-2, -2).apply { topMargin = px(12) })
+        warnTv = pill("").apply { visibility = View.GONE; maxLines = 3 }
+        root.addView(warnTv, LinearLayout.LayoutParams(-2, -2).apply { topMargin = px(12) })
 
         // DTMF keypad (hidden until asked)
         dtmfTv = text("", 24f, white).apply { gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR }
@@ -255,12 +258,18 @@ class InCallActivity : SahlActivity() {
 
     /** Smart caller info: how often you talk, last call, and the contact's note. */
     private fun loadFacts(num: String) {
-        factsTv.text = ""; noteTv.visibility = View.GONE
-        if (num.isBlank()) return
+        factsTv.text = ""; noteTv.visibility = View.GONE; warnTv.visibility = View.GONE
+        if (num.isBlank()) { warnTv.text = getString(R.string.warn_hidden); warnTv.visibility = View.VISIBLE; return }
         Thread {
             val f = Facts.of(this, num)
+            val warn = try { Warning.of(this, num, Lookup.caller(this, num).name, f) } catch (e: Exception) { null }
             runOnUiThread {
                 if (shownNumber != num) return@runOnUiThread
+                if (warn != null) {
+                    warnTv.text = warn.first
+                    warnTv.background = round(if (warn.second) 0xCCB3261E.toInt() else 0x26FFFFFF, 16f)
+                    warnTv.visibility = View.VISIBLE
+                }
                 factsTv.text = if (f.count == 0) getString(R.string.first_call)
                     else getString(R.string.call_facts, f.count, relDay(f.last))
                 val note = f.note

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"
+    android:background="@drawable/widget_bg" android:padding="14dp">
+    <TextView android:id="@+id/mtitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textColor="#FFF5C84C" android:textSize="15sp" android:textStyle="bold" android:paddingBottom="4dp" />
+        <LinearLayout android:id="@+id/m0" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="6dp" android:paddingBottom="6dp">
+            <TextView android:id="@+id/mn0" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                android:maxLines="1" android:ellipsize="end" android:textColor="#FFEDEBE4" android:textSize="14sp" />
+            <TextView android:id="@+id/mt0" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="#FFE26A6A" android:textSize="12sp" android:layout_marginStart="8dp" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/m1" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="6dp" android:paddingBottom="6dp">
+            <TextView android:id="@+id/mn1" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                android:maxLines="1" android:ellipsize="end" android:textColor="#FFEDEBE4" android:textSize="14sp" />
+            <TextView android:id="@+id/mt1" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="#FFE26A6A" android:textSize="12sp" android:layout_marginStart="8dp" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/m2" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="6dp" android:paddingBottom="6dp">
+            <TextView android:id="@+id/mn2" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                android:maxLines="1" android:ellipsize="end" android:textColor="#FFEDEBE4" android:textSize="14sp" />
+            <TextView android:id="@+id/mt2" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="#FFE26A6A" android:textSize="12sp" android:layout_marginStart="8dp" />
+        </LinearLayout>
+</LinearLayout>

@@ -99,4 +99,27 @@
     <string name="delete_history_q">حذف كل المكالمات مع هذا الرقم من السجل؟</string>
     <string name="note">ملاحظة</string>
     <string name="call_details">تفاصيل المكالمات</string>
+    <string name="warn_hidden">رقم مخفي</string>
+    <string name="warn_international">دولي · %1$s</string>
+    <string name="warn_new">لم يتصل بك من قبل</string>
+    <string name="warn_seen">اتصل %1$d مرات من قبل</string>
+    <string name="stopped">المحظورة</string>
+    <string name="no_stopped">لم يوقف حارس المكالمات أي مكالمة</string>
+    <string name="guard_settings">إعدادات حارس المكالمات</string>
+    <string name="call_guard">حارس المكالمات</string>
+    <string name="guard_on">حارس المكالمات في سهل للأدوات يحميك ✓</string>
+    <string name="guard_off">حارس المكالمات مثبت لكنه غير مفعّل — افتحه لتفعيله</string>
+    <string name="guard_missing">ثبّت سهل للأدوات لحظر الإزعاج والأرقام المخفية.</string>
+    <string name="never_block">لا تحظر هذا الرقم أبدًا</string>
+    <string name="allowed_done">أضيف إلى قائمة السماح</string>
+    <string name="call_notes">ملاحظات المكالمات</string>
+    <string name="call_note">ملاحظة لهذه المكالمة</string>
+    <string name="note_hint">عن ماذا كانت المكالمة؟</string>
+    <string name="tap_to_note">اضغط على مكالمة لإضافة ملاحظة</string>
+    <string name="note_prompt_title">انتهت المكالمة مع %1$s</string>
+    <string name="note_prompt_text">اضغط لإضافة ملاحظة عن المكالمة</string>
+    <string name="note_prompt_setting">اقتراح إضافة ملاحظة بعد المكالمة</string>
+    <string name="missed_widget">مكالمات سهل الفائتة</string>
+    <string name="missed_today">%1$d فائتة اليوم</string>
+    <string name="no_missed">لا مكالمات فائتة اليوم ✓</string>
 </resources>

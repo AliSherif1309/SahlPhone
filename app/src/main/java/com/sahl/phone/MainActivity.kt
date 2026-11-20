@@ -32,6 +32,8 @@ class MainActivity : SahlActivity() {
     private var recents: List<Recent> = emptyList()
     private var typed = ""
     private var missedOnly = false
+    private var blockedView = false
+    private var stopped: List<Guard.Stopped> = emptyList()
 
     private val perms = arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE,
         Manifest.permission.READ_CALL_LOG, Manifest.permission.WRITE_CALL_LOG, Manifest.permission.READ_CONTACTS)
@@ -67,6 +69,7 @@ class MainActivity : SahlActivity() {
     private fun handleIntent(i: Intent?) {
         val d = i?.data
         if (d != null && d.scheme == "tel") { typed = d.schemeSpecificPart ?: ""; tab = 0 }
+        if (i?.hasExtra("tab") == true) tab = i.getIntExtra("tab", 0)
     }
 
     override fun onResume() {
@@ -151,7 +154,8 @@ class MainActivity : SahlActivity() {
         Thread {
             val c = try { Data.contacts(this) } catch (e: Exception) { emptyList() }
             val r = try { Data.recents(this) } catch (e: Exception) { emptyList() }
-            runOnUiThread { contacts = c; recents = r; renderTabs(); show() }
+            val g = Guard.log(this, 100)
+            runOnUiThread { contacts = c; recents = r; stopped = g; renderTabs(); show(); MissedWidget.refresh(this) }
         }.start()
     }
 
@@ -232,9 +236,11 @@ class MainActivity : SahlActivity() {
             background = round(if (on) col(R.color.emerald) else col(R.color.tonal), 18f)
             setPadding(px(16), px(8), px(16), px(8)); setOnClickListener { go() }
         }.press(18f), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = px(8) })
-        chip(R.string.all, !missedOnly) { missedOnly = false; show() }
-        chip(R.string.missed, missedOnly) { missedOnly = true; show() }
+        chip(R.string.all, !missedOnly && !blockedView) { missedOnly = false; blockedView = false; show() }
+        chip(R.string.missed, missedOnly) { missedOnly = true; blockedView = false; show() }
+        if (Guard.installed(this)) chip(R.string.stopped, blockedView) { blockedView = true; missedOnly = false; show() }
         box.addView(chips)
+        if (blockedView) { stoppedView(box); content.addView(box); return }
         val list = recents.filter { !missedOnly || it.type == CallLog.Calls.MISSED_TYPE || it.type == CallLog.Calls.REJECTED_TYPE }
         if (list.isEmpty()) { box.addView(empty(R.drawable.ic_history, R.string.no_recents), LinearLayout.LayoutParams(-1, 0, 1f)); content.addView(box); return }
         val lv = ListView(this).apply { divider = null; selector = android.graphics.drawable.ColorDrawable(0); clipToPadding = false; setPadding(0, 0, 0, px(12)) }
@@ -271,6 +277,30 @@ class MainActivity : SahlActivity() {
         content.addView(box)
     }
 
+    /** Calls that Call Guard (Sahl Tools) blocked or silenced. */
+    private fun stoppedView(box: LinearLayout) {
+        if (stopped.isEmpty()) { box.addView(empty(R.drawable.ic_block, R.string.no_stopped), LinearLayout.LayoutParams(-1, 0, 1f)); return }
+        val lv = ListView(this).apply { divider = null; selector = android.graphics.drawable.ColorDrawable(0) }
+        lv.adapter = object : BaseAdapter() {
+            override fun getCount() = stopped.size
+            override fun getItem(p: Int) = stopped[p]
+            override fun getItemId(p: Int) = p.toLong()
+            override fun getView(p: Int, cv: View?, parent: ViewGroup): View {
+                val g = stopped[p]
+                val title = g.number.ifBlank { getString(R.string.private_number) }
+                val sub = g.label + "  ·  " + dayLabel(g.time) + " " + time(g.time)
+                val row = personRow(title, sub, col(R.color.text), "#", null,
+                    if (g.action == Guard.BLOCK) R.drawable.ic_block else R.drawable.ic_volume, col(R.color.sub))
+                row.setOnClickListener { if (g.number.isNotBlank()) startActivity(Intent(this@MainActivity, CallDetailActivity::class.java).putExtra("number", g.number)) }
+                return row
+            }
+        }
+        box.addView(lv, LinearLayout.LayoutParams(-1, 0, 1f))
+        box.addView(text(getString(R.string.guard_settings), 14f, col(R.color.emerald), true).apply {
+            gravity = Gravity.CENTER; setPadding(0, px(12), 0, px(12)); setOnClickListener { Guard.openSettings(this@MainActivity) }
+        }.press(14f))
+    }
+
     private fun dayOf(t: Long) = Instant.ofEpochMilli(t).atZone(ZoneId.systemDefault()).toLocalDate()
     private fun dayLabel(t: Long): String {
         val d = dayOf(t); val today = LocalDate.now()
@@ -301,7 +331,7 @@ class MainActivity : SahlActivity() {
                     if (packageInstalled("com.sahl.contacts")) setPackage("com.sahl.contacts")
                 })
         })
-        items.add(Triple(R.drawable.ic_block, getString(R.string.block)) { toast(if (Data.block(this, r.number)) R.string.blocked_done else R.string.make_default) })
+        items.add(Triple(R.drawable.ic_block, getString(R.string.block)) { toast(if (Guard.block(this, r.number)) R.string.blocked_done else R.string.make_default) })
         items.add(Triple(R.drawable.ic_delete, getString(R.string.delete_entry)) { Data.deleteRecent(this, r); load() })
         sheet(name ?: r.number, items)
     }
