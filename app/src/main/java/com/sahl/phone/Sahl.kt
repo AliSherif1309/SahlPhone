@@ -96,9 +96,37 @@ class SahlCrash(private val app: Context, private val prev: Thread.UncaughtExcep
     override fun uncaughtException(t: Thread, e: Throwable) {
         try {
             val v = try { app.packageManager.getPackageInfo(app.packageName, 0).versionName } catch (x: Exception) { "?" }
-            Sahl.prefs(app).edit().putString("crash", "v$v\n" + android.util.Log.getStackTraceString(e).take(6000)).commit()
-        } catch (x: Exception) { }
-        prev?.uncaughtException(t, e)
+            val log = "v$v\n" + android.util.Log.getStackTraceString(e).take(6000)
+            Sahl.prefs(app).edit().putString("crash", log).commit()
+            // Show the report in its own screen (works even when the main screen crashes on open)
+            app.startActivity(Intent(app, CrashActivity::class.java).putExtra("log", log)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            android.os.Process.killProcess(android.os.Process.myPid())
+            System.exit(10)
+        } catch (x: Exception) { prev?.uncaughtException(t, e) }
+    }
+}
+
+/** Plain crash-report screen (no Sahl UI code, so it cannot crash itself). */
+class CrashActivity : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val log = intent.getStringExtra("log") ?: Sahl.lastCrash(this) ?: "No report"
+        Sahl.clearCrash(this)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(40, 80, 40, 40) }
+        box.addView(TextView(this).apply { text = "Sahl crash report"; textSize = 22f })
+        box.addView(android.widget.Button(this).apply {
+            text = "Copy report"
+            setOnClickListener {
+                getSystemService(android.content.ClipboardManager::class.java)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("crash", log))
+                android.widget.Toast.makeText(this@CrashActivity, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        })
+        box.addView(android.widget.ScrollView(this).apply {
+            addView(TextView(this@CrashActivity).apply { text = log; textSize = 11f; setTextIsSelectable(true) })
+        }, LinearLayout.LayoutParams(-1, 0, 1f))
+        setContentView(box)
     }
 }
 

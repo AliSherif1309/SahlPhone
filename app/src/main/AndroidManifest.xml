@@ -80,5 +80,6 @@
         </activity>
         <provider android:name=".UnionProvider" android:authorities="com.sahl.phone.union"
             android:exported="true" android:readPermission="com.sahl.permission.UNION" />
+        <activity android:name=".CrashActivity" android:exported="false" android:process=":crash" />
     </application>
 </manifest>
