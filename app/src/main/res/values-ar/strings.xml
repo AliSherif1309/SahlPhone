@@ -94,4 +94,9 @@
     <string name="edit_replies">عدّل الردود (رد في كل سطر)</string>
     <string name="country_code">رمز الدولة الافتراضي</string>
     <string name="save">حفظ</string>
+    <string name="detail_facts">%1$d مكالمة · مدة الحديث %2$s</string>
+    <string name="call_history">سجل المكالمات</string>
+    <string name="delete_history_q">حذف كل المكالمات مع هذا الرقم من السجل؟</string>
+    <string name="note">ملاحظة</string>
+    <string name="call_details">تفاصيل المكالمات</string>
 </resources>

@@ -131,15 +131,14 @@ class MainActivity : SahlActivity() {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                 setOnClickListener { if (tab != i) { tab = i; renderTabs(); show() } }
             }
-            val pillBox = FrameLayout(this).apply {
-                background = if (on) round(col(R.color.tonal), 16f) else null
-                setPadding(px(20), px(4), px(20), px(4))
-            }
-            pillBox.addView(icon(ic, if (on) col(R.color.emerald) else col(R.color.sub), 24))
+            val pillBox = FrameLayout(this).apply { background = if (on) round(col(R.color.tonal), 16f) else null }
+            pillBox.addView(ImageView(this).apply {
+                setImageResource(ic); imageTintList = ColorStateList.valueOf(if (on) col(R.color.emerald) else col(R.color.sub))
+            }, FrameLayout.LayoutParams(px(24), px(24), Gravity.CENTER))
             if (badge > 0) pillBox.addView(text(badge.toString(), 10f, 0xFFFFFFFF.toInt(), true).apply {
                 gravity = Gravity.CENTER; background = oval(col(R.color.danger))
             }, FrameLayout.LayoutParams(px(16), px(16), Gravity.TOP or Gravity.END))
-            b.addView(pillBox)
+            b.addView(pillBox, LinearLayout.LayoutParams(px(64), px(32)))
             b.addView(text(getString(label), 12f, if (on) col(R.color.emerald) else col(R.color.sub), on).apply {
                 gravity = Gravity.CENTER; setPadding(0, px(4), 0, 0)
             })
@@ -248,7 +247,7 @@ class MainActivity : SahlActivity() {
                 val outer = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
                 val day = dayOf(r.date)
                 if (p == 0 || dayOf(list[p - 1].date) != day) outer.addView(text(dayLabel(r.date), 13f, col(R.color.emerald), true).apply {
-                    setPadding(px(22), px(14), px(22), px(4))
+                    setPaddingRelative(px(22), px(14), px(22), px(4))
                 })
                 val name = Lookup.caller(this@MainActivity, r.number).name ?: r.name
                 val missed = r.type == CallLog.Calls.MISSED_TYPE || r.type == CallLog.Calls.REJECTED_TYPE
@@ -261,7 +260,8 @@ class MainActivity : SahlActivity() {
                 val title = (name ?: r.number.ifBlank { getString(R.string.private_number) }) + if (r.count > 1) "  (${r.count})" else ""
                 val subText = (if (name != null) r.number + "  ·  " else (Countries.of(r.number, Sahl.countryCode(this@MainActivity), rtl)?.let { "$it  ·  " } ?: "")) + time(r.date)
                 val row = personRow(title, subText, if (missed) col(R.color.danger) else col(R.color.text), name ?: "#", null, ic, color)
-                row.setOnClickListener { call(r.number) }
+                if (r.number.isNotBlank()) row.addView(iconButton(R.drawable.ic_call, 0, col(R.color.emerald), 44, 22) { call(r.number) })
+                row.setOnClickListener { if (r.number.isNotBlank()) startActivity(Intent(this@MainActivity, CallDetailActivity::class.java).putExtra("number", r.number)) }
                 row.setOnLongClickListener { recentMenu(r, name); true }
                 outer.addView(swipe(row, r.number))
                 return outer
@@ -285,6 +285,9 @@ class MainActivity : SahlActivity() {
     private fun recentMenu(r: Recent, name: String?) {
         if (r.number.isBlank()) return
         val items = mutableListOf(
+            Triple(R.drawable.ic_history, getString(R.string.call_details)) {
+                startActivity(Intent(this, CallDetailActivity::class.java).putExtra("number", r.number))
+            },
             Triple(R.drawable.ic_call, getString(R.string.call)) { call(r.number) },
             Triple(R.drawable.ic_chat, getString(R.string.message)) { sms(r.number) },
             Triple(R.drawable.ic_bell, getString(R.string.remind_me)) { remind(r.number, name) },
@@ -319,7 +322,7 @@ class MainActivity : SahlActivity() {
         val favs = contacts.filter { it.starred }.distinctBy { it.contactId }
         val strip = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         if (favs.isNotEmpty()) {
-            strip.addView(label(getString(R.string.favorites)).apply { setPadding(px(20), px(6), 0, px(4)) })
+            strip.addView(label(getString(R.string.favorites)).apply { setPaddingRelative(px(20), px(6), 0, px(4)) })
             val row = LinearLayout(this).apply { setPadding(px(12), 0, px(12), px(4)) }
             for (e in favs) {
                 val cell = LinearLayout(this).apply {
@@ -381,7 +384,7 @@ class MainActivity : SahlActivity() {
     private fun initial(name: String) = Norm.section(name).let { if (it == "#") "" else it }
 
     private fun personRow(title: String, sub: String, color: Int, avatarName: String, photo: String?, trailIcon: Int, trailColor: Int): LinearLayout {
-        val r = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(px(18), px(9), px(18), px(9)) }.press(0f)
+        val r = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPaddingRelative(px(18), px(9), px(10), px(9)) }.press(0f)
         val (f, iv, letter) = avatar(46)
         f.background = oval(avatarColor(avatarName))
         letter.text = initial(avatarName)
@@ -390,7 +393,7 @@ class MainActivity : SahlActivity() {
         }, FrameLayout.LayoutParams(px(22), px(22), Gravity.CENTER))
         Thumbs.load(this, photo, iv, letter)
         r.addView(f)
-        val t = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(px(14), 0, px(8), 0) }
+        val t = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingRelative(px(14), 0, px(8), 0) }
         t.addView(text(title, 16f, color).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
         t.addView(text(sub, 13f, col(R.color.sub)).apply { maxLines = 1; textDirection = View.TEXT_DIRECTION_LTR; textAlignment = View.TEXT_ALIGNMENT_VIEW_START })
         r.addView(t, LinearLayout.LayoutParams(0, -2, 1f))

@@ -43,6 +43,8 @@ class InCallActivity : SahlActivity() {
     private var shownNumber: String? = null
     private var askedSim: Call? = null
     private var prox: PowerManager.WakeLock? = null
+    private var dialingSince = 0L
+    private var dialingCall: Call? = null
 
     private val listener: () -> Unit = { render() }
     private val tick = object : Runnable { override fun run() { renderStatus(); main.postDelayed(this, 1000) } }
@@ -281,7 +283,11 @@ class InCallActivity : SahlActivity() {
         val call = CallManager.primary() ?: return
         statusTv.text = when (call.st()) {
             Call.STATE_RINGING -> getString(R.string.incoming)
-            Call.STATE_DIALING -> getString(R.string.calling)
+            // Android has no "other side is ringing" state; after a few seconds of dialing the call is ringing
+            Call.STATE_DIALING -> {
+                if (dialingSince == 0L || dialingCall !== call) { dialingSince = System.currentTimeMillis(); dialingCall = call }
+                getString(if (System.currentTimeMillis() - dialingSince > 3000) R.string.ringing else R.string.calling)
+            }
             Call.STATE_CONNECTING, Call.STATE_SELECT_PHONE_ACCOUNT -> getString(R.string.connecting)
             Call.STATE_HOLDING -> getString(R.string.on_hold)
             Call.STATE_ACTIVE -> {

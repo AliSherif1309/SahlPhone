@@ -94,4 +94,9 @@
     <string name="edit_replies">Edit replies (one per line)</string>
     <string name="country_code">Default country code</string>
     <string name="save">Save</string>
+    <string name="detail_facts">%1$d calls · %2$s talk time</string>
+    <string name="call_history">Call history</string>
+    <string name="delete_history_q">Delete all calls with this number from recents?</string>
+    <string name="note">Note</string>
+    <string name="call_details">Call details</string>
 </resources>
