@@ -56,6 +56,7 @@ object Data {
     }
 
     fun deleteRecent(c: Context, r: Recent) {
+        if (r.ids.isEmpty()) return   // list still loading from cache
         c.contentResolver.delete(CallLog.Calls.CONTENT_URI, "${CallLog.Calls._ID} IN (${r.ids.joinToString(",")})", null)
     }
 
