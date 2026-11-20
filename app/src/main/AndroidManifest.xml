@@ -21,6 +21,8 @@
 
     <queries>
         <provider android:authorities="com.sahl.contacts.union" />
+        <provider android:authorities="com.sahl.adhan.union" />
+        <package android:name="com.sahl.adhan" />
         <package android:name="com.sahl.contacts" />
         <intent><action android:name="android.intent.action.SENDTO" /><data android:scheme="smsto" /></intent>
     </queries>
@@ -64,5 +66,19 @@
         </service>
 
         <receiver android:name=".CallActionReceiver" android:exported="false" />
+        <receiver android:name=".ReminderReceiver" android:exported="false" />
+
+        <!-- Sahl Union: other Sahl apps place calls and read call history through these -->
+        <activity android:name=".CallActivity" android:exported="true"
+            android:permission="com.sahl.permission.UNION"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="com.sahl.phone.action.CALL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <provider android:name=".UnionProvider" android:authorities="com.sahl.phone.union"
+            android:exported="true" android:readPermission="com.sahl.permission.UNION" />
     </application>
 </manifest>

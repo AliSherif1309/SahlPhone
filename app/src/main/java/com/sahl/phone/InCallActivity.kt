@@ -1,6 +1,8 @@
 package com.sahl.phone
 
 import android.app.AlertDialog
+import android.content.res.ColorStateList
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -15,12 +17,21 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.*
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 class InCallActivity : SahlActivity() {
     private val main = Handler(Looper.getMainLooper())
+    private val white = 0xFFFFFFFF.toInt()
+    private val soft = 0xBFFFFFFF.toInt()
     private lateinit var nameTv: TextView
     private lateinit var numberTv: TextView
     private lateinit var statusTv: TextView
+    private lateinit var factsTv: TextView
+    private lateinit var noteTv: TextView
+    private lateinit var prayerTv: TextView
     private lateinit var avatarLetter: TextView
     private lateinit var avatarImg: ImageView
     private lateinit var avatarBox: FrameLayout
@@ -28,7 +39,7 @@ class InCallActivity : SahlActivity() {
     private lateinit var activeBox: LinearLayout
     private lateinit var padBox: LinearLayout
     private lateinit var dtmfTv: TextView
-    private val toggles = HashMap<String, TextView>()
+    private val toggles = HashMap<String, FrameLayout>()
     private var shownNumber: String? = null
     private var askedSim: Call? = null
     private var prox: PowerManager.WakeLock? = null
@@ -41,84 +52,92 @@ class InCallActivity : SahlActivity() {
         if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(true); setTurnScreenOn(true) }
         else @Suppress("DEPRECATION") window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        window.statusBarColor = col(R.color.w_right); window.navigationBarColor = col(R.color.w_right)
+        systemBars(col(R.color.w_right), false)
 
-        val white = 0xFFFFFFFF.toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
-            setBackgroundColor(col(R.color.w_right)); setPadding(px(24), px(56), px(24), px(40))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(col(R.color.w_left), col(R.color.w_right)))
+            setPadding(px(24), px(48), px(24), px(36))
         }
-        val (f, iv, letter) = avatar(112)
+        prayerTv = pill(getString(R.string.silenced_prayer)).apply { visibility = View.GONE }
+        root.addView(prayerTv, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = px(16) })
+
+        val (f, iv, letter) = avatar(120)
         avatarBox = f; avatarImg = iv; avatarLetter = letter
-        root.addView(f, LinearLayout.LayoutParams(px(112), px(112)))
-        nameTv = text("", 28f, white, true).apply { gravity = Gravity.CENTER; setPadding(0, px(18), 0, 0) }
-        numberTv = text("", 16f, 0xCCFFFFFF.toInt()).apply { gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR }
-        statusTv = text("", 15f, col(R.color.w_gold)).apply { gravity = Gravity.CENTER; setPadding(0, px(8), 0, 0) }
-        root.addView(nameTv); root.addView(numberTv); root.addView(statusTv)
+        root.addView(f, LinearLayout.LayoutParams(px(120), px(120)))
+        nameTv = text("", 30f, white, true).apply { gravity = Gravity.CENTER; setPadding(0, px(18), 0, 0); maxLines = 2 }
+        numberTv = text("", 16f, soft).apply { gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR }
+        statusTv = text("", 16f, col(R.color.w_gold), true).apply { gravity = Gravity.CENTER; setPadding(0, px(8), 0, 0) }
+        factsTv = text("", 13f, soft).apply { gravity = Gravity.CENTER; setPadding(0, px(10), 0, 0) }
+        noteTv = pill("").apply { visibility = View.GONE; maxLines = 3 }
+        root.addView(nameTv); root.addView(numberTv); root.addView(statusTv); root.addView(factsTv)
+        root.addView(noteTv, LinearLayout.LayoutParams(-2, -2).apply { topMargin = px(12) })
 
         // DTMF keypad (hidden until asked)
-        dtmfTv = text("", 22f, white).apply { gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR }
+        dtmfTv = text("", 24f, white).apply { gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR }
         padBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; layoutDirection = View.LAYOUT_DIRECTION_LTR }
         padBox.addView(dtmfTv)
         for (row in listOf("123", "456", "789", "*0#")) {
-            val r = LinearLayout(this)
+            val r = LinearLayout(this).apply { gravity = Gravity.CENTER }
             for (ch in row) r.addView(text(ch.toString(), 26f, white).apply {
-                gravity = Gravity.CENTER; setPadding(0, px(10), 0, px(10))
+                gravity = Gravity.CENTER; background = oval(0x1FFFFFFF)
                 setOnClickListener {
                     CallManager.primary()?.let { c -> c.playDtmfTone(ch); main.postDelayed({ c.stopDtmfTone() }, 150) }
                     dtmfTv.append(ch.toString())
                 }
-            }, LinearLayout.LayoutParams(0, -2, 1f))
+            }.press(circle = true), LinearLayout.LayoutParams(px(64), px(64)).apply { setMargins(px(10), px(5), px(10), px(5)) })
             padBox.addView(r)
         }
-        root.addView(padBox, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(16) })
+        root.addView(padBox, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(12) })
         root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
 
         // Active-call controls
         activeBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
         val grid = LinearLayout(this)
-        fun toggle(key: String, icon: String, label: Int, go: () -> Unit) {
-            val b = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(0, px(8), 0, px(8))
-                setOnClickListener { go() }
-            }
-            val ic = text(icon, 24f, white).apply {
-                gravity = Gravity.CENTER; background = oval(0x22FFFFFF)
-            }
-            b.addView(ic, LinearLayout.LayoutParams(px(58), px(58)))
-            b.addView(text(getString(label), 12f, 0xCCFFFFFF.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, px(6), 0, 0) })
-            toggles[key] = ic
+        fun toggle(key: String, ic: Int, label: Int, go: () -> Unit) {
+            val b = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(0, px(8), 0, px(8)) }
+            val btn = iconButton(ic, 0x26FFFFFF, white, 60, 26) { go() }
+            b.addView(btn)
+            b.addView(text(getString(label), 12f, soft).apply { gravity = Gravity.CENTER; setPadding(0, px(6), 0, 0) })
+            toggles[key] = btn
             grid.addView(b, LinearLayout.LayoutParams(0, -2, 1f))
         }
-        toggle("mute", "🎙", R.string.mute) {
-            val muted = CallManager.audio?.isMuted == true
-            CallManager.service?.setMuted(!muted)
+        toggle("mute", R.drawable.ic_mic, R.string.mute) {
+            CallManager.service?.setMuted(CallManager.audio?.isMuted != true)
         }
-        toggle("speaker", "🔊", R.string.speaker) {
+        toggle("speaker", R.drawable.ic_volume, R.string.speaker) {
             val route = CallManager.audio?.route ?: CallAudioState.ROUTE_EARPIECE
             CallManager.service?.setAudioRoute(if (route == CallAudioState.ROUTE_SPEAKER) CallAudioState.ROUTE_WIRED_OR_EARPIECE else CallAudioState.ROUTE_SPEAKER)
         }
-        toggle("bt", "ᛒ", R.string.bluetooth) {
+        toggle("bt", R.drawable.ic_bluetooth, R.string.bluetooth) {
             val route = CallManager.audio?.route ?: 0
             CallManager.service?.setAudioRoute(if (route == CallAudioState.ROUTE_BLUETOOTH) CallAudioState.ROUTE_WIRED_OR_EARPIECE else CallAudioState.ROUTE_BLUETOOTH)
         }
-        toggle("hold", "⏸", R.string.hold) {
-            val c = CallManager.primary() ?: return@toggle
-            if (c.st() == Call.STATE_HOLDING) c.unhold() else c.hold()
+        toggle("hold", R.drawable.ic_pause, R.string.hold) {
+            val c = CallManager.primary()
+            if (c != null) { if (c.st() == Call.STATE_HOLDING) c.unhold() else c.hold() }
         }
-        toggle("pad", "⌨", R.string.keypad) { padBox.visibility = if (padBox.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+        toggle("pad", R.drawable.ic_dialpad, R.string.keypad) {
+            padBox.visibility = if (padBox.visibility == View.VISIBLE) View.GONE else View.VISIBLE; render()
+        }
         activeBox.addView(grid, LinearLayout.LayoutParams(-1, -2))
-        activeBox.addView(roundButton("✆", 0xFFD64545.toInt(), R.string.end) { CallManager.primary()?.disconnect() },
-            LinearLayout.LayoutParams(-2, -2).apply { topMargin = px(24) })
+        activeBox.addView(bigButton(R.drawable.ic_call_end, col(R.color.danger), R.string.end) { CallManager.primary()?.disconnect() },
+            LinearLayout.LayoutParams(-2, -2).apply { topMargin = px(22) })
         root.addView(activeBox, LinearLayout.LayoutParams(-1, -2))
 
-        // Ringing controls
-        ringBox = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        ringBox.addView(roundButton("✆", 0xFFD64545.toInt(), R.string.decline) { CallManager.primary()?.reject(false, null) },
+        // Ringing controls: reply · remind, then decline · answer
+        ringBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
+        val extra = LinearLayout(this).apply { gravity = Gravity.CENTER }
+        extra.addView(smallAction(R.drawable.ic_chat, R.string.reply) { replyAndDecline() })
+        extra.addView(smallAction(R.drawable.ic_bell, R.string.remind_me) { remindAndDecline() })
+        ringBox.addView(extra, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = px(26) })
+        val big = LinearLayout(this).apply { gravity = Gravity.CENTER }
+        big.addView(bigButton(R.drawable.ic_call_end, col(R.color.danger), R.string.decline) { CallManager.primary()?.reject(false, null) },
             LinearLayout.LayoutParams(0, -2, 1f))
-        ringBox.addView(roundButton("✆", 0xFF1E9E63.toInt(), R.string.answer) {
+        big.addView(bigButton(R.drawable.ic_call, col(R.color.ok), R.string.answer) {
             CallManager.primary()?.answer(VideoProfile.STATE_AUDIO_ONLY)
         }, LinearLayout.LayoutParams(0, -2, 1f))
+        ringBox.addView(big, LinearLayout.LayoutParams(-1, -2))
         root.addView(ringBox, LinearLayout.LayoutParams(-1, -2))
 
         setContentView(root)
@@ -127,12 +146,48 @@ class InCallActivity : SahlActivity() {
             prox = pm.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "sahl:prox").apply { setReferenceCounted(false) }
     }
 
-    private fun roundButton(icon: String, color: Int, label: Int, go: () -> Unit) = LinearLayout(this).apply {
+    private fun pill(s: String) = text(s, 13f, white).apply {
+        background = round(0x26FFFFFF, 16f); setPadding(px(14), px(7), px(14), px(7)); gravity = Gravity.CENTER
+    }
+
+    private fun bigButton(ic: Int, color: Int, label: Int, go: () -> Unit) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-        addView(text(icon, 30f, 0xFFFFFFFF.toInt()).apply {
-            gravity = Gravity.CENTER; background = oval(color); setOnClickListener { go() }
-        }, LinearLayout.LayoutParams(px(72), px(72)))
-        addView(text(getString(label), 13f, 0xCCFFFFFF.toInt()).apply { gravity = Gravity.CENTER; setPadding(0, px(8), 0, 0) })
+        addView(iconButton(ic, color, white, 76, 32, go).apply { elevation = 4f * dp })
+        addView(text(getString(label), 13f, soft).apply { gravity = Gravity.CENTER; setPadding(0, px(8), 0, 0) })
+    }
+
+    private fun smallAction(ic: Int, label: Int, go: () -> Unit): LinearLayout {
+        val v = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL; background = round(0x26FFFFFF, 22f)
+            setPadding(px(16), px(10), px(18), px(10))
+            addView(icon(ic, white, 18))
+            addView(text(getString(label), 14f, white).apply { setPadding(px(8), 0, 0, 0) })
+            setOnClickListener { go() }
+            layoutParams = LinearLayout.LayoutParams(-2, -2).apply { setMargins(px(6), 0, px(6), 0) }
+        }
+        return v.press(22f)
+    }
+
+    private fun replyAndDecline() {
+        val call = CallManager.primary() ?: return
+        val items = QuickReplies.list(this)
+        AlertDialog.Builder(this).setTitle(R.string.reply)
+            .setItems(items.toTypedArray()) { _, i -> call.reject(true, items[i]) }
+            .setNegativeButton(R.string.cancel, null).show()
+    }
+
+    private fun remindAndDecline() {
+        val call = CallManager.primary() ?: return
+        val num = call.number()
+        val labels = arrayOf(getString(R.string.in_minutes, 15), getString(R.string.in_hour), getString(R.string.in_hours, 2))
+        val mins = intArrayOf(15, 60, 120)
+        AlertDialog.Builder(this).setTitle(R.string.remind_me)
+            .setItems(labels) { _, i ->
+                if (num.isNotBlank()) Reminders.schedule(this, num, Lookup.caller(this, num).name, mins[i])
+                call.reject(false, null)
+                toast(R.string.reminder_set)
+            }
+            .setNegativeButton(R.string.cancel, null).show()
     }
 
     override fun onResume() {
@@ -163,29 +218,63 @@ class InCallActivity : SahlActivity() {
             shownNumber = num
             val who = Lookup.caller(this, num)
             nameTv.text = who.name ?: num.ifBlank { getString(R.string.private_number) }
-            numberTv.text = if (who.name != null) num else ""
+            val country = if (num.isNotBlank()) Countries.of(num, Sahl.countryCode(this), rtl) else null
+            numberTv.text = listOfNotNull(if (who.name != null) num else null, country).joinToString("  ·  ")
             avatarBox.background = oval(avatarColor(nameTv.text.toString()))
-            avatarLetter.text = Norm.section(nameTv.text.toString()).let { if (it == "#") "👤" else it }
+            avatarLetter.text = Norm.section(nameTv.text.toString()).let { if (it == "#") "" else it }
             Thumbs.load(this, who.photo, avatarImg, avatarLetter)
+            loadFacts(num)
         }
         val st = call.st()
         val ringing = st == Call.STATE_RINGING
         ringBox.visibility = if (ringing) View.VISIBLE else View.GONE
         activeBox.visibility = if (ringing) View.GONE else View.VISIBLE
+        prayerTv.visibility = if (ringing && PrayerSilence.silenced === call) View.VISIBLE else View.GONE
         if (st == Call.STATE_SELECT_PHONE_ACCOUNT && askedSim !== call) { askedSim = call; chooseSim(call) }
 
         val a = CallManager.audio
-        fun on(key: String, active: Boolean) { toggles[key]?.background = oval(if (active) col(R.color.w_gold) and 0xCCFFFFFF.toInt() else 0x22FFFFFF) }
+        fun on(key: String, active: Boolean) {
+            val b = toggles[key] ?: return
+            b.background = oval(if (active) white else 0x26FFFFFF)
+            (b.getChildAt(0) as? ImageView)?.imageTintList = ColorStateList.valueOf(if (active) col(R.color.w_right) else white)
+        }
         on("mute", a?.isMuted == true)
         on("speaker", a?.route == CallAudioState.ROUTE_SPEAKER)
         on("bt", a?.route == CallAudioState.ROUTE_BLUETOOTH)
         on("hold", st == Call.STATE_HOLDING)
-        toggles["bt"]?.alpha = if (a != null && (a.supportedRouteMask and CallAudioState.ROUTE_BLUETOOTH) != 0) 1f else 0.35f
+        on("pad", padBox.visibility == View.VISIBLE)
+        (toggles["bt"]?.parent as? View)?.alpha = if (a != null && (a.supportedRouteMask and CallAudioState.ROUTE_BLUETOOTH) != 0) 1f else 0.35f
 
         // Screen off near the ear, only for earpiece calls
         val nearEar = st == Call.STATE_ACTIVE && (a == null || a.route == CallAudioState.ROUTE_EARPIECE)
         if (nearEar) prox?.acquire(3 * 3600_000L) else prox?.release()
         renderStatus()
+    }
+
+    /** Smart caller info: how often you talk, last call, and the contact's note. */
+    private fun loadFacts(num: String) {
+        factsTv.text = ""; noteTv.visibility = View.GONE
+        if (num.isBlank()) return
+        Thread {
+            val f = Facts.of(this, num)
+            runOnUiThread {
+                if (shownNumber != num) return@runOnUiThread
+                factsTv.text = if (f.count == 0) getString(R.string.first_call)
+                    else getString(R.string.call_facts, f.count, relDay(f.last))
+                val note = f.note
+                if (!note.isNullOrBlank()) { noteTv.text = note; noteTv.visibility = View.VISIBLE }
+            }
+        }.start()
+    }
+
+    private fun relDay(t: Long): String {
+        val d = Instant.ofEpochMilli(t).atZone(ZoneId.systemDefault()).toLocalDate()
+        val today = LocalDate.now()
+        return when (d) {
+            today -> getString(R.string.today)
+            today.minusDays(1) -> getString(R.string.yesterday)
+            else -> d.format(DateTimeFormatter.ofPattern("d MMM", resources.configuration.locales[0]))
+        }
     }
 
     private fun renderStatus() {

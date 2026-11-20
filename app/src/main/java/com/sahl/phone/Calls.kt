@@ -87,6 +87,7 @@ class SahlInCallService : InCallService() {
         CallManager.service = this
         CallManager.calls.add(call)
         call.registerCallback(CallManager.callback)
+        if (call.st() == Call.STATE_RINGING) PrayerSilence.onRinging(this, call)
         Notifs.update(this)
         if (call.st() != Call.STATE_RINGING) openScreen(this)
         CallManager.changed()
@@ -171,18 +172,22 @@ class CallActionReceiver : BroadcastReceiver() {
 /** Placing calls, with a SIM choice when the phone has two. */
 @SuppressLint("MissingPermission")
 object Dialer {
-    fun call(a: Activity, number: String) {
+    /** Places a call; [done] runs after the call is placed or the SIM choice is cancelled. */
+    fun call(a: Activity, number: String, done: () -> Unit = {}) {
         val n = number.trim()
-        if (n.isEmpty()) return
+        if (n.isEmpty()) { done(); return }
         val tm = a.getSystemService(TelecomManager::class.java)
         val accounts: List<PhoneAccountHandle> = try { tm.callCapablePhoneAccounts } catch (e: SecurityException) { emptyList() }
         val defaultAcc = try { tm.getDefaultOutgoingPhoneAccount("tel") } catch (e: Exception) { null }
         if (accounts.size > 1 && defaultAcc == null) {
             val labels = accounts.map { h -> try { tm.getPhoneAccount(h)?.label?.toString() } catch (e: Exception) { null } ?: h.id }
+            var picked = false
             AlertDialog.Builder(a).setTitle(R.string.choose_sim)
-                .setItems(labels.toTypedArray()) { _, i -> place(a, n, accounts[i]) }
-                .setNegativeButton(R.string.cancel, null).show()
-        } else place(a, n, null)
+                .setItems(labels.toTypedArray()) { _, i -> picked = true; place(a, n, accounts[i]); done() }
+                .setNegativeButton(R.string.cancel, null)
+                .setOnDismissListener { if (!picked) done() }
+                .show()
+        } else { place(a, n, null); done() }
     }
 
     private fun place(a: Activity, n: String, acc: PhoneAccountHandle?) {

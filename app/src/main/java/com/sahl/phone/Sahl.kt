@@ -3,19 +3,27 @@ package com.sahl.phone
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.os.Build
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
+import android.view.WindowInsetsController
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -35,6 +43,11 @@ object Sahl {
     const val EXTRA_EVENT = "event"
     const val EXTRA_FROM = "from"
     const val EVENT_CONTACTS_CHANGED = "contacts_changed"
+
+    // Sahl Union data doors (only Sahl-signed apps can open them)
+    const val CONTACTS_UNION = "content://com.sahl.contacts.union"
+    const val PHONE_UNION = "content://com.sahl.phone.union"
+    const val ADHAN_UNION = "content://com.sahl.adhan.union"
 
     fun prefs(c: Context) = c.getSharedPreferences("sahl", Context.MODE_PRIVATE)
 
@@ -173,12 +186,14 @@ object Thumbs {
 }
 
 /** Base for every screen: Sahl theme, font and small view helpers. */
+/** Base for every screen: modern Sahl look, font and view helpers. Shared by all Sahl apps. */
 abstract class SahlActivity : Activity() {
     val dp get() = resources.displayMetrics.density
     fun px(v: Int) = (v * dp).toInt()
     fun col(id: Int) = getColor(id)
     val font: Typeface? by lazy { try { resources.getFont(R.font.thmanyah) } catch (e: Exception) { null } }
     val rtl get() = resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
+    val night get() = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
     /** True while the crash report is on screen — screens wait before loading data. */
     var crashOpen = false
@@ -202,8 +217,22 @@ abstract class SahlActivity : Activity() {
                 .setOnDismissListener { crashOpen = false; onCrashClosed() }
                 .show()
         }
-        window.statusBarColor = col(R.color.emerald_dark)
-        window.navigationBarColor = col(R.color.bg)
+        systemBars(col(R.color.bg), !night)
+    }
+
+    /** Colour the status/navigation bars and pick dark or light icons. */
+    @Suppress("DEPRECATION")
+    fun systemBars(color: Int, lightIcons: Boolean) {
+        window.statusBarColor = color
+        window.navigationBarColor = color
+        if (Build.VERSION.SDK_INT >= 30) {
+            val f = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            window.insetsController?.setSystemBarsAppearance(if (lightIcons) f else 0, f)
+        } else {
+            var v = window.decorView.systemUiVisibility
+            v = if (lightIcons) v or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR else v and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
+            window.decorView.systemUiVisibility = v
+        }
     }
 
     fun text(s: CharSequence, size: Float = 15f, color: Int = col(R.color.text), bold: Boolean = false) =
@@ -212,12 +241,48 @@ abstract class SahlActivity : Activity() {
             typeface = Typeface.create(font, if (bold) Typeface.BOLD else Typeface.NORMAL)
         }
 
-    fun round(color: Int, radius: Float = 16f, stroke: Int = 0) = GradientDrawable().apply {
+    fun round(color: Int, radius: Float = 20f, stroke: Int = 0) = GradientDrawable().apply {
         setColor(color); cornerRadius = radius * dp
         if (stroke != 0) setStroke(px(1), stroke)
     }
 
     fun oval(color: Int) = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }
+
+    /** Touch ripple on any view (rounded or circular). */
+    fun <T : View> T.press(radius: Float = 20f, circle: Boolean = false): T {
+        val mask = if (circle) oval(0xFF000000.toInt()) else round(0xFF000000.toInt(), radius)
+        foreground = RippleDrawable(ColorStateList.valueOf(col(R.color.ripple)), null, mask)
+        isClickable = true; isFocusable = true
+        return this
+    }
+
+    fun icon(res: Int, color: Int = col(R.color.text), sizeDp: Int = 24) = ImageView(this).apply {
+        setImageResource(res); imageTintList = ColorStateList.valueOf(color)
+        layoutParams = LinearLayout.LayoutParams(px(sizeDp), px(sizeDp))
+    }
+
+    /** Round icon button: tonal circle with an icon. */
+    fun iconButton(res: Int, bg: Int = col(R.color.tonal), tint: Int = col(R.color.emerald), sizeDp: Int = 44,
+                   iconDp: Int = 22, go: () -> Unit): FrameLayout = FrameLayout(this).apply {
+        background = oval(bg)
+        addView(ImageView(this@SahlActivity).apply {
+            setImageResource(res); imageTintList = ColorStateList.valueOf(tint)
+        }, FrameLayout.LayoutParams(px(iconDp), px(iconDp), Gravity.CENTER))
+        layoutParams = LinearLayout.LayoutParams(px(sizeDp), px(sizeDp))
+        setOnClickListener { go() }
+        press(circle = true)
+    }
+
+    /** Card container with soft background. */
+    fun card(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = round(col(R.color.card), 22f)
+        setPadding(px(16), px(14), px(16), px(14))
+        elevation = 1f * dp
+    }
+
+    /** Small gold section title. */
+    fun label(s: String) = text(s, 13f, col(R.color.gold), true).apply { setPadding(px(4), px(2), 0, px(8)) }
 
     /** Calm avatar colour picked from the name. */
     fun avatarColor(name: String): Int {
@@ -238,24 +303,161 @@ abstract class SahlActivity : Activity() {
         return Triple(f, iv, letter)
     }
 
-    /** Top bar with back arrow, title and text actions. */
-    fun header(title: String, back: Boolean, actions: List<Pair<String, () -> Unit>> = emptyList()): LinearLayout {
+    /**
+     * Modern top bar: optional back button, large title, icon actions.
+     * Actions are (drawable id or text) to click handler.
+     */
+    fun header(title: String, back: Boolean, actions: List<Pair<Any, () -> Unit>> = emptyList(), large: Boolean = !back): LinearLayout {
         val bar = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(col(R.color.emerald_dark))
-            setPadding(px(8), px(10), px(8), px(10))
+            setPadding(px(if (back) 8 else 20), px(14), px(12), px(8))
         }
-        if (back) bar.addView(text(if (rtl) "→" else "←", 22f, 0xFFFFFFFF.toInt()).apply {
-            setPadding(px(10), 0, px(10), 0); setOnClickListener { finish() }
-        })
-        bar.addView(text(title, 19f, col(R.color.gold), true).apply {
-            setPadding(px(8), 0, 0, 0); maxLines = 1
+        if (back) bar.addView(iconButton(R.drawable.ic_back, 0, col(R.color.text)) { finish() })
+        bar.addView(text(title, if (large) 28f else 20f, col(R.color.text), true).apply {
+            setPadding(px(if (back) 6 else 0), 0, 0, 0); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(0, -2, 1f))
-        for ((label, act) in actions) bar.addView(text(label, 21f, 0xFFFFFFFF.toInt()).apply {
-            setPadding(px(12), 0, px(12), 0); setOnClickListener { act() }
-        })
+        for ((a, go) in actions) {
+            val v = if (a is Int) iconButton(a, 0, col(R.color.text), 44, 22, go)
+            else text(a.toString(), 20f).apply { setPadding(px(12), px(8), px(12), px(8)); setOnClickListener { go() } }.press(16f)
+            bar.addView(v)
+        }
         return bar
     }
 
+    /** Pill search box with a magnifier icon. */
+    fun searchBox(hintText: String, onChange: (String) -> Unit): Pair<LinearLayout, EditText> {
+        val box = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL; background = round(col(R.color.tonal), 26f)
+            setPadding(px(16), 0, px(8), 0)
+        }
+        box.addView(icon(R.drawable.ic_search, col(R.color.sub), 20))
+        val et = EditText(this).apply {
+            hint = hintText; textSize = 16f; typeface = font; isSingleLine = true; background = null
+            setTextColor(col(R.color.text)); setHintTextColor(col(R.color.sub))
+            setPadding(px(10), px(13), px(10), px(13))
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) { onChange(s?.toString() ?: "") }
+            })
+        }
+        box.addView(et, LinearLayout.LayoutParams(0, -2, 1f))
+        val clear = iconButton(R.drawable.ic_close, 0, col(R.color.sub), 36, 18) { et.setText("") }
+        clear.visibility = View.GONE
+        et.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) { clear.visibility = if (s.isNullOrEmpty()) View.GONE else View.VISIBLE }
+        })
+        box.addView(clear)
+        return box to et
+    }
+
+    /** Floating round action button. */
+    fun fab(res: Int, go: () -> Unit) = iconButton(res, col(R.color.emerald), 0xFFFFFFFF.toInt(), 58, 26, go).apply { elevation = 6f * dp }
+
+    /** Bottom sheet with icon actions. Items: (icon, label, action). */
+    fun sheet(title: String?, items: List<Triple<Int, String, () -> Unit>>) {
+        val d = android.app.Dialog(this)
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                setColor(col(R.color.card)); val r = 26f * dp
+                cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
+            }
+            setPadding(px(8), px(10), px(8), px(24))
+        }
+        box.addView(View(this).apply { background = round(col(R.color.line), 3f) },
+            LinearLayout.LayoutParams(px(36), px(4)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = px(10) })
+        if (title != null) box.addView(text(title, 16f, col(R.color.sub), true).apply {
+            setPadding(px(16), px(4), px(16), px(10)); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+        })
+        for ((ic, label, go) in items) {
+            val row = LinearLayout(this).apply {
+                gravity = Gravity.CENTER_VERTICAL; setPadding(px(16), px(14), px(16), px(14))
+                setOnClickListener { d.dismiss(); go() }
+            }.press(16f)
+            row.addView(icon(ic, col(R.color.emerald), 22))
+            row.addView(text(label, 16f).apply { setPadding(px(18), 0, 0, 0) })
+            box.addView(row)
+        }
+        d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        d.setContentView(box)
+        d.window?.let { w ->
+            w.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
+            w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            w.setGravity(Gravity.BOTTOM)
+            w.attributes = w.attributes.apply { windowAnimations = android.R.style.Animation_InputMethod }
+        }
+        d.show()
+    }
+
     fun toast(id: Int) = android.widget.Toast.makeText(this, id, android.widget.Toast.LENGTH_SHORT).show()
+}
+
+/**
+ * List row you can swipe: right = first action (e.g. call), left = second (e.g. message).
+ * Works inside ListView/ScrollView without blocking vertical scrolling.
+ */
+class SwipeRow(
+    ctx: Context, val content: View, bg: Int,
+    rightIcon: Int, rightColor: Int, private val onRight: () -> Unit,
+    leftIcon: Int, leftColor: Int, private val onLeft: () -> Unit
+) : FrameLayout(ctx) {
+    private val d = ctx.resources.displayMetrics.density
+    private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
+    private var downX = 0f; private var downY = 0f
+    private var dragging = false; private var armed = false
+    private val rightBg = side(rightIcon, rightColor, Gravity.START or Gravity.CENTER_VERTICAL)
+    private val leftBg = side(leftIcon, leftColor, Gravity.END or Gravity.CENTER_VERTICAL)
+
+    private fun side(icon: Int, color: Int, g: Int) = FrameLayout(context).apply {
+        setBackgroundColor(color); visibility = View.INVISIBLE
+        layoutDirection = View.LAYOUT_DIRECTION_LTR
+        addView(ImageView(context).apply { setImageResource(icon); imageTintList = ColorStateList.valueOf(0xFFFFFFFF.toInt()) },
+            LayoutParams((26 * d).toInt(), (26 * d).toInt(), g).apply { marginStart = (24 * d).toInt(); marginEnd = (24 * d).toInt() })
+    }
+
+    init {
+        addView(rightBg, LayoutParams(-1, -1)); addView(leftBg, LayoutParams(-1, -1))
+        content.setBackgroundColor(bg)
+        addView(content, LayoutParams(-1, -2))
+    }
+
+    override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; dragging = false; armed = false }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = e.rawX - downX; val dy = e.rawY - downY
+                if (!dragging && Math.abs(dx) > slop * 2 && Math.abs(dx) > Math.abs(dy) * 1.5f) {
+                    dragging = true; parent?.requestDisallowInterceptTouchEvent(true)
+                }
+            }
+        }
+        return dragging
+    }
+
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (!dragging) return super.onTouchEvent(e)
+        val th = width * 0.28f
+        when (e.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                val dx = e.rawX - downX
+                content.translationX = dx
+                rightBg.visibility = if (dx > 0) View.VISIBLE else View.INVISIBLE
+                leftBg.visibility = if (dx < 0) View.VISIBLE else View.INVISIBLE
+                val now = Math.abs(dx) > th
+                if (now != armed) { armed = now; if (now) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val dx = content.translationX
+                if (e.actionMasked == MotionEvent.ACTION_UP) { if (dx > th) onRight() else if (dx < -th) onLeft() }
+                content.animate().translationX(0f).setDuration(180).withEndAction {
+                    rightBg.visibility = View.INVISIBLE; leftBg.visibility = View.INVISIBLE
+                }.start()
+                dragging = false; parent?.requestDisallowInterceptTouchEvent(false)
+            }
+        }
+        return true
+    }
 }

@@ -33,6 +33,65 @@ class SettingsActivity : SahlActivity() {
             })
         }
 
+        // Prayer-time silence (prayer times come from Sahl Adhan through Sahl Union)
+        val pr = card(R.string.prayer_silence)
+        val adhanOk = PrayerSilence.available(this)
+        pr.addView(text(getString(if (adhanOk) R.string.adhan_ok else R.string.adhan_missing), 13f,
+            if (adhanOk) col(R.color.emerald) else col(R.color.sub)).apply { setPadding(0, px(2), 0, px(6)) })
+        fun sw(label: Int, key: String, def: Boolean) = pr.addView(Switch(this).apply {
+            text = getString(label); typeface = font; setTextColor(col(R.color.text)); textSize = 15f
+            isChecked = p.getBoolean(key, def); isEnabled = adhanOk
+            setPadding(0, px(6), 0, px(6))
+            setOnCheckedChangeListener { _, on -> p.edit().putBoolean(key, on).apply() }
+        })
+        sw(R.string.prayer_silence_on, "prayer_silence", false)
+        pr.addView(text(getString(R.string.prayer_window), 14f, col(R.color.sub)).apply { setPadding(0, px(8), 0, 0) })
+        val mins = intArrayOf(10, 15, 20, 30, 45)
+        pr.addView(Spinner(this).apply {
+            adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, mins.map { it.toString() })
+            setSelection(mins.indexOf(PrayerSilence.minutes(this@SettingsActivity)).coerceAtLeast(0))
+            isEnabled = adhanOk
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(a: AdapterView<*>?, v: android.view.View?, pos: Int, id: Long) { p.edit().putInt("prayer_minutes", mins[pos]).apply() }
+                override fun onNothingSelected(a: AdapterView<*>?) {}
+            }
+        })
+        sw(R.string.prayer_allow_fav, "prayer_allow_fav", true)
+        sw(R.string.prayer_auto_reply, "prayer_auto_reply", false)
+
+        // Quick replies
+        val qr = card(R.string.quick_replies)
+        val qrText = text(QuickReplies.list(this).joinToString("\n") { "• $it" }, 14f, col(R.color.sub))
+        qr.addView(qrText)
+        qr.addView(Button(this).apply {
+            text = getString(R.string.edit_replies); typeface = font
+            setOnClickListener {
+                val et = EditText(this@SettingsActivity).apply {
+                    setText(QuickReplies.list(this@SettingsActivity).joinToString("\n")); typeface = font; minLines = 4
+                }
+                android.app.AlertDialog.Builder(this@SettingsActivity).setTitle(R.string.quick_replies).setView(et)
+                    .setPositiveButton(R.string.save) { _, _ ->
+                        QuickReplies.save(this@SettingsActivity, et.text.toString().split('\n').map { it.trim() }.filter { it.isNotEmpty() })
+                        qrText.text = QuickReplies.list(this@SettingsActivity).joinToString("\n") { "• $it" }
+                    }
+                    .setNegativeButton(R.string.cancel, null).show()
+            }
+        })
+
+        // Country code (for showing where unknown callers are from)
+        val cc = card(R.string.country_code)
+        cc.addView(EditText(this).apply {
+            setText(Sahl.countryCode(this@SettingsActivity)); inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            textSize = 16f; typeface = font; setTextColor(col(R.color.text))
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    val v = Norm.digits(s?.toString() ?: ""); if (v.isNotEmpty()) p.edit().putString("cc", v).apply()
+                }
+            })
+        })
+
         val up = card(R.string.check_updates)
         up.addView(text(getString(R.string.version, BuildConfig.VERSION_NAME), 14f, col(R.color.sub)))
         up.addView(Button(this).apply {
@@ -46,10 +105,10 @@ class SettingsActivity : SahlActivity() {
 
     private fun card(title: Int): LinearLayout {
         val c = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; background = round(col(R.color.card), 18f)
+            orientation = LinearLayout.VERTICAL; background = round(col(R.color.card), 22f)
             setPadding(px(16), px(12), px(16), px(12))
         }
-        c.addView(text(getString(title), 13f, col(R.color.gold), true))
+        c.addView(text(getString(title), 13f, col(R.color.emerald), true))
         body.addView(c, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(12) })
         return c
     }
