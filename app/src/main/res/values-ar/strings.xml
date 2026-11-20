@@ -122,4 +122,19 @@
     <string name="missed_widget">مكالمات سهل الفائتة</string>
     <string name="missed_today">%1$d فائتة اليوم</string>
     <string name="no_missed">لا مكالمات فائتة اليوم ✓</string>
+    <string name="add_call">إضافة مكالمة</string>
+    <string name="swap">تبديل</string>
+    <string name="merge">دمج</string>
+    <string name="on_hold_x">في الانتظار: %1$s</string>
+    <string name="prayer_missed_title">%1$d مكالمة فائتة أثناء %2$s</string>
+    <string name="call_back_x">اتصل بـ %1$s</string>
+    <string name="weekly_title">أسبوعك في المكالمات</string>
+    <string name="weekly_line">%1$d مكالمة · %2$d دقيقة حديث</string>
+    <string name="weekly_not_returned">%1$d مكالمة فائتة لم تُعاوَد</string>
+    <string name="this_week">هذا الأسبوع</string>
+    <string name="most_talked">الأكثر:</string>
+    <string name="extras">إضافات مفيدة</string>
+    <string name="flip_setting">اقلب الهاتف على وجهه لإسكات الرنين</string>
+    <string name="prayer_callback_setting">بعد الصلاة، ذكّرني بالمكالمات الفائتة</string>
+    <string name="weekly_setting">ملخص المكالمات الأسبوعي (السبت)</string>
 </resources>

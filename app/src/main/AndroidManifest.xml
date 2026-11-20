@@ -71,6 +71,8 @@
 
         <receiver android:name=".CallActionReceiver" android:exported="false" />
         <receiver android:name=".ReminderReceiver" android:exported="false" />
+        <receiver android:name=".PrayerMissedReceiver" android:exported="false" />
+        <receiver android:name=".WeeklyReceiver" android:exported="false" />
         <receiver android:name=".MissedWidget" android:exported="false" android:label="@string/missed_widget">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_missed_info" />

@@ -60,6 +60,7 @@ class MainActivity : SahlActivity() {
 
         handleIntent(intent)
         Updater.dailyCheck(this)
+        WeeklySummary.schedule(this)
         if (!crashOpen && !granted()) askPermissions()
     }
 
@@ -244,6 +245,7 @@ class MainActivity : SahlActivity() {
         val list = recents.filter { !missedOnly || it.type == CallLog.Calls.MISSED_TYPE || it.type == CallLog.Calls.REJECTED_TYPE }
         if (list.isEmpty()) { box.addView(empty(R.drawable.ic_history, R.string.no_recents), LinearLayout.LayoutParams(-1, 0, 1f)); content.addView(box); return }
         val lv = ListView(this).apply { divider = null; selector = android.graphics.drawable.ColorDrawable(0); clipToPadding = false; setPadding(0, 0, 0, px(12)) }
+        if (!missedOnly) lv.addHeaderView(weekCard(), null, false)
         lv.adapter = object : BaseAdapter() {
             override fun getCount() = list.size
             override fun getItem(p: Int) = list[p]
@@ -275,6 +277,36 @@ class MainActivity : SahlActivity() {
         }
         box.addView(lv, LinearLayout.LayoutParams(-1, 0, 1f))
         content.addView(box)
+    }
+
+    /** "This week" card at the top of Recents. */
+    private fun weekCard(): View {
+        val box = LinearLayout(this).apply { setPaddingRelative(px(16), px(4), px(16), px(4)) }
+        val c = card().apply { background = round(col(R.color.tonal), 22f); elevation = 0f }
+        box.addView(c, LinearLayout.LayoutParams(-1, -2))
+        Thread {
+            val w = WeeklySummary.compute(this)
+            runOnUiThread {
+                if (w.calls == 0) { box.visibility = View.GONE; return@runOnUiThread }
+                c.addView(label(getString(R.string.this_week)))
+                c.addView(text(getString(R.string.weekly_line, w.calls, (w.talk / 60).toInt()), 15f, col(R.color.text), true))
+                if (w.top.isNotEmpty()) c.addView(text(getString(R.string.most_talked) + " " +
+                    w.top.joinToString(" · ") { "${it.first.substringBefore(' ')} (${it.second})" }, 13f, col(R.color.sub)).apply { setPadding(0, px(4), 0, 0) })
+                if (w.missedNotReturned.isNotEmpty()) {
+                    c.addView(text(getString(R.string.weekly_not_returned, w.missedNotReturned.size), 13f, col(R.color.danger), true).apply { setPadding(0, px(8), 0, px(2)) })
+                    val row = LinearLayout(this)
+                    for (n in w.missedNotReturned.take(4)) {
+                        val nm = (Lookup.caller(this, n).name ?: n).substringBefore(' ')
+                        row.addView(text(nm, 13f, col(R.color.emerald), true).apply {
+                            background = round(col(R.color.card), 16f); setPadding(px(12), px(6), px(12), px(6))
+                            setOnClickListener { call(n) }
+                        }.press(16f), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = px(6) })
+                    }
+                    c.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(row) })
+                }
+            }
+        }.start()
+        return box
     }
 
     /** Calls that Call Guard (Sahl Tools) blocked or silenced. */

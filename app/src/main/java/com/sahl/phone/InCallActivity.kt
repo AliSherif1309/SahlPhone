@@ -33,6 +33,8 @@ class InCallActivity : SahlActivity() {
     private lateinit var noteTv: TextView
     private lateinit var prayerTv: TextView
     private lateinit var warnTv: TextView
+    private lateinit var heldTv: TextView
+    private lateinit var extraRow: LinearLayout
     private lateinit var avatarLetter: TextView
     private lateinit var avatarImg: ImageView
     private lateinit var avatarBox: FrameLayout
@@ -73,6 +75,8 @@ class InCallActivity : SahlActivity() {
         statusTv = text("", 16f, col(R.color.w_gold), true).apply { gravity = Gravity.CENTER; setPadding(0, px(8), 0, 0) }
         factsTv = text("", 13f, soft).apply { gravity = Gravity.CENTER; setPadding(0, px(10), 0, 0) }
         noteTv = pill("").apply { visibility = View.GONE; maxLines = 3 }
+        heldTv = pill("").apply { visibility = View.GONE }
+        root.addView(heldTv, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = px(10) })
         root.addView(nameTv); root.addView(numberTv); root.addView(statusTv); root.addView(factsTv)
         root.addView(noteTv, LinearLayout.LayoutParams(-2, -2).apply { topMargin = px(12) })
         warnTv = pill("").apply { visibility = View.GONE; maxLines = 3 }
@@ -126,6 +130,24 @@ class InCallActivity : SahlActivity() {
             padBox.visibility = if (padBox.visibility == View.VISIBLE) View.GONE else View.VISIBLE; render()
         }
         activeBox.addView(grid, LinearLayout.LayoutParams(-1, -2))
+        // Second row: add call · swap · merge (swap/merge only with two calls)
+        extraRow = LinearLayout(this)
+        grid2 = extraRow
+        toggle2("add", R.drawable.ic_add, R.string.add_call) {
+            startActivity(android.content.Intent(this, MainActivity::class.java).putExtra("tab", 0)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        toggle2("swap", R.drawable.ic_history, R.string.swap) {
+            val active = CallManager.calls.firstOrNull { it.st() == Call.STATE_ACTIVE }
+            val held = CallManager.calls.firstOrNull { it.st() == Call.STATE_HOLDING }
+            if (held != null) { active?.hold(); held.unhold() }
+        }
+        toggle2("merge", R.drawable.ic_people, R.string.merge) {
+            val c = CallManager.calls.firstOrNull { it.st() == Call.STATE_ACTIVE } ?: CallManager.primary()
+            val other = c?.conferenceableCalls?.firstOrNull()
+            if (c != null && other != null) c.conference(other) else c?.mergeConference()
+        }
+        activeBox.addView(extraRow, LinearLayout.LayoutParams(-1, -2))
         activeBox.addView(bigButton(R.drawable.ic_call_end, col(R.color.danger), R.string.end) { CallManager.primary()?.disconnect() },
             LinearLayout.LayoutParams(-2, -2).apply { topMargin = px(22) })
         root.addView(activeBox, LinearLayout.LayoutParams(-1, -2))
@@ -149,6 +171,16 @@ class InCallActivity : SahlActivity() {
         val pm = getSystemService(PowerManager::class.java)
         if (pm.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK))
             prox = pm.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "sahl:prox").apply { setReferenceCounted(false) }
+    }
+
+    private var grid2: LinearLayout? = null
+    private fun toggle2(key: String, ic: Int, label: Int, go: () -> Unit) {
+        val b = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(0, px(6), 0, px(6)) }
+        val btn = iconButton(ic, 0x26FFFFFF, white, 52, 22) { go() }
+        b.addView(btn)
+        b.addView(text(getString(label), 12f, soft).apply { gravity = Gravity.CENTER; setPadding(0, px(4), 0, 0) })
+        toggles[key] = btn
+        grid2?.addView(b, LinearLayout.LayoutParams(0, -2, 1f))
     }
 
     private fun pill(s: String) = text(s, 13f, white).apply {
@@ -248,6 +280,17 @@ class InCallActivity : SahlActivity() {
         on("bt", a?.route == CallAudioState.ROUTE_BLUETOOTH)
         on("hold", st == Call.STATE_HOLDING)
         on("pad", padBox.visibility == View.VISIBLE)
+        // Two calls: show who is on hold, enable swap/merge
+        val others = CallManager.calls.filter { it !== call && it.st() != Call.STATE_DISCONNECTED }
+        val two = others.isNotEmpty()
+        (toggles["swap"]?.parent as? View)?.visibility = if (two) View.VISIBLE else View.GONE
+        (toggles["merge"]?.parent as? View)?.visibility = if (two) View.VISIBLE else View.GONE
+        val heldCall = others.firstOrNull { it.st() == Call.STATE_HOLDING }
+        if (heldCall != null) {
+            val hn = heldCall.number()
+            heldTv.text = getString(R.string.on_hold_x, Lookup.caller(this, hn).name ?: hn)
+            heldTv.visibility = View.VISIBLE
+        } else heldTv.visibility = View.GONE
         (toggles["bt"]?.parent as? View)?.alpha = if (a != null && (a.supportedRouteMask and CallAudioState.ROUTE_BLUETOOTH) != 0) 1f else 0.35f
 
         // Screen off near the ear, only for earpiece calls

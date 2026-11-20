@@ -122,4 +122,19 @@
     <string name="missed_widget">Sahl missed calls</string>
     <string name="missed_today">%1$d missed today</string>
     <string name="no_missed">No missed calls today ✓</string>
+    <string name="add_call">Add call</string>
+    <string name="swap">Swap</string>
+    <string name="merge">Merge</string>
+    <string name="on_hold_x">On hold: %1$s</string>
+    <string name="prayer_missed_title">%1$d missed during %2$s</string>
+    <string name="call_back_x">Call %1$s</string>
+    <string name="weekly_title">Your week in calls</string>
+    <string name="weekly_line">%1$d calls · %2$d min talking</string>
+    <string name="weekly_not_returned">%1$d missed calls not returned</string>
+    <string name="this_week">This week</string>
+    <string name="most_talked">Most:</string>
+    <string name="extras">Helpful extras</string>
+    <string name="flip_setting">Turn phone face-down to silence ringing</string>
+    <string name="prayer_callback_setting">After prayer, remind me of calls I missed</string>
+    <string name="weekly_setting">Weekly call summary (Saturday)</string>
 </resources>

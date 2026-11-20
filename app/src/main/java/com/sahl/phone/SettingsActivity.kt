@@ -59,6 +59,17 @@ class SettingsActivity : SahlActivity() {
         sw(R.string.prayer_allow_fav, "prayer_allow_fav", true)
         sw(R.string.prayer_auto_reply, "prayer_auto_reply", false)
 
+        // Helpful extras
+        val ex = card(R.string.extras)
+        fun sw2(label: Int, key: String, def: Boolean) = ex.addView(Switch(this).apply {
+            text = getString(label); typeface = font; setTextColor(col(R.color.text)); textSize = 15f
+            isChecked = p.getBoolean(key, def); setPadding(0, px(6), 0, px(6))
+            setOnCheckedChangeListener { _, on -> p.edit().putBoolean(key, on).apply() }
+        })
+        sw2(R.string.flip_setting, "flip_silence", true)
+        sw2(R.string.prayer_callback_setting, "prayer_callback", true)
+        sw2(R.string.weekly_setting, "weekly_summary", true)
+
         // Call Guard (in Sahl Tools) and call notes
         val gd = card(R.string.call_guard)
         val gOn = Guard.installed(this) && Guard.active(this)

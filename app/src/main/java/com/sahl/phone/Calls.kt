@@ -70,8 +70,14 @@ object CallManager {
 
     fun changed() = main.post { listeners.toList().forEach { it() }; service?.let { Notifs.update(it) } }
 
+    /** Calls that rang on this phone (incoming), to spot missed ones. */
+    val rang = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Call, Boolean>())
+
     val callback = object : Call.Callback() {
-        override fun onStateChanged(call: Call, state: Int) { changed() }
+        override fun onStateChanged(call: Call, state: Int) {
+            if (calls.none { it.st() == Call.STATE_RINGING }) FlipSilence.stop()
+            changed()
+        }
         override fun onDetailsChanged(call: Call, details: Call.Details) { changed() }
     }
 
@@ -87,7 +93,11 @@ class SahlInCallService : InCallService() {
         CallManager.service = this
         CallManager.calls.add(call)
         call.registerCallback(CallManager.callback)
-        if (call.st() == Call.STATE_RINGING) PrayerSilence.onRinging(this, call)
+        if (call.st() == Call.STATE_RINGING) {
+            CallManager.rang.add(call)
+            PrayerSilence.onRinging(this, call)
+            FlipSilence.start(this)
+        }
         Notifs.update(this)
         if (call.st() != Call.STATE_RINGING) openScreen(this)
         CallManager.changed()
@@ -95,7 +105,12 @@ class SahlInCallService : InCallService() {
 
     override fun onCallRemoved(call: Call) {
         // Answered call ended → offer a note; missed calls → refresh the widget
-        try { if (call.details.connectTimeMillis > 0) CallNotes.offer(this, call.number()) } catch (e: Exception) { }
+        try {
+            if (call.details.connectTimeMillis > 0) CallNotes.offer(this, call.number())
+            else if (call in CallManager.rang) PrayerMissed.onMissed(this, call.number())
+        } catch (e: Exception) { }
+        CallManager.rang.remove(call)
+        if (CallManager.calls.none { it !== call && it.st() == Call.STATE_RINGING }) FlipSilence.stop()
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ MissedWidget.refresh(this) }, 1500)
         call.unregisterCallback(CallManager.callback)
         CallManager.calls.remove(call)
