@@ -125,7 +125,16 @@ class PrayerMissedReceiver : BroadcastReceiver() {
 data class Week(val calls: Int, val talk: Long, val top: List<Pair<String, Int>>, val missedNotReturned: List<String>)
 
 object WeeklySummary {
+    private var cached: Week? = null
+    private var cachedAt = 0L
+
     fun compute(c: Context): Week {
+        val now = System.currentTimeMillis()
+        cached?.let { if (now - cachedAt < 5 * 60_000L) return it }
+        return computeFresh(c).also { cached = it; cachedAt = now }
+    }
+
+    private fun computeFresh(c: Context): Week {
         val since = System.currentTimeMillis() - 7 * 86_400_000L
         var calls = 0; var talk = 0L
         val count = LinkedHashMap<String, Int>(); val numberOf = HashMap<String, String>()

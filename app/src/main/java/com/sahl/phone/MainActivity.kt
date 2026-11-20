@@ -84,7 +84,6 @@ class MainActivity : SahlActivity() {
 
     override fun onResume() {
         super.onResume()
-        Lookup.clear()
         renderBanner(); renderTabs(); load()
         CallManager.listeners.add(callListener); renderCallBar()
     }
@@ -177,13 +176,33 @@ class MainActivity : SahlActivity() {
         }
     }
 
+    /** Recents are saved so the list shows instantly next time while it refreshes. */
+    private fun saveCache(r: List<Recent>) {
+        val a = org.json.JSONArray()
+        for (x in r.take(80)) a.put(org.json.JSONObject().put("n", x.number).put("nm", x.name ?: "").put("t", x.type).put("d", x.date)
+            .put("du", x.duration).put("c", x.count))
+        Sahl.prefs(this).edit().putString("recents_cache", a.toString()).apply()
+    }
+
+    private fun readCache(): List<Recent> = try {
+        val a = org.json.JSONArray(Sahl.prefs(this).getString("recents_cache", "[]"))
+        (0 until a.length()).map { a.getJSONObject(it) }.map {
+            Recent(emptyList(), it.getString("n"), it.getString("nm").ifEmpty { null }, it.getInt("t"), it.getLong("d"), it.getLong("du"), it.getInt("c"))
+        }
+    } catch (e: Exception) { emptyList() }
+
     private fun load() {
         if (!granted()) { show(); return }
+        if (recents.isEmpty()) { val cached = readCache(); if (cached.isNotEmpty()) { recents = cached; renderTabs(); if (tab == 1) show() } }
         Thread {
-            val c = try { Data.contacts(this) } catch (e: Exception) { emptyList() }
+            // Recents first (that's what you look at), with every caller name looked up here — not while scrolling
             val r = try { Data.recents(this) } catch (e: Exception) { emptyList() }
+            for (n in r.map { it.number }.distinct()) if (n.isNotBlank()) Lookup.caller(this, n)
+            runOnUiThread { recents = r; renderTabs(); if (tab == 1) show() }
+            saveCache(r)
+            val c = try { Data.contacts(this) } catch (e: Exception) { emptyList() }
             val g = Guard.log(this, 100)
-            runOnUiThread { contacts = c; recents = r; stopped = g; renderTabs(); show(); MissedWidget.refresh(this) }
+            runOnUiThread { contacts = c; stopped = g; if (tab != 1 || blockedView) show(); MissedWidget.refresh(this) }
         }.start()
     }
 

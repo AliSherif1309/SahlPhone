@@ -31,9 +31,11 @@ data class Caller(val name: String?, val photo: String?)
 
 object Lookup {
     private val cache = ConcurrentHashMap<String, Caller>()
+    private var clearedAt = System.currentTimeMillis()
 
     fun caller(c: Context, number: String): Caller {
         if (number.isBlank()) return Caller(null, null)
+        if (System.currentTimeMillis() - clearedAt > 10 * 60_000L) { cache.clear(); clearedAt = System.currentTimeMillis() }
         cache[number]?.let { return it }
         var r = Caller(null, null)
         // 1) Sahl Union — Sahl Contacts answers for the family
