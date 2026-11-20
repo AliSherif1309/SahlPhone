@@ -28,6 +28,8 @@ class MainActivity : SahlActivity() {
     private lateinit var content: FrameLayout
     private lateinit var tabBar: LinearLayout
     private lateinit var banner: LinearLayout
+    private lateinit var callBar: LinearLayout
+    private val callListener: () -> Unit = { renderCallBar() }
     private var contacts: List<Entry> = emptyList()
     private var recents: List<Recent> = emptyList()
     private var typed = ""
@@ -48,6 +50,13 @@ class MainActivity : SahlActivity() {
         )))
         banner = card().apply { background = round(col(R.color.tonal), 22f); elevation = 0f }
         root.addView(banner, LinearLayout.LayoutParams(-1, -2).apply { setMargins(px(16), px(4), px(16), px(6)) })
+        // "Return to call" bar while a call is going on
+        callBar = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL; background = round(col(R.color.ok), 22f); visibility = View.GONE
+            setPadding(px(16), px(12), px(16), px(12)); elevation = 4f * dp
+            setOnClickListener { SahlInCallService.openScreen(this@MainActivity) }
+        }
+        root.addView(callBar, LinearLayout.LayoutParams(-1, -2).apply { setMargins(px(16), px(4), px(16), px(6)) })
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         tabBar = LinearLayout(this).apply {
@@ -77,6 +86,20 @@ class MainActivity : SahlActivity() {
         super.onResume()
         Lookup.clear()
         renderBanner(); renderTabs(); load()
+        CallManager.listeners.add(callListener); renderCallBar()
+    }
+
+    override fun onPause() { super.onPause(); CallManager.listeners.remove(callListener) }
+
+    private fun renderCallBar() {
+        val call = CallManager.primary()
+        if (call == null) { callBar.visibility = View.GONE; return }
+        callBar.removeAllViews(); callBar.visibility = View.VISIBLE
+        callBar.addView(icon(R.drawable.ic_call, 0xFFFFFFFF.toInt(), 22))
+        val n = call.number()
+        callBar.addView(text(getString(R.string.return_to_call, Lookup.caller(this, n).name ?: n.ifBlank { getString(R.string.private_number) }),
+            15f, 0xFFFFFFFF.toInt(), true).apply { setPaddingRelative(px(12), 0, 0, 0); maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
+        callBar.addView(icon(R.drawable.ic_back, 0xFFFFFFFF.toInt(), 20).apply { rotation = if (rtl) 0f else 180f })
     }
 
     private fun askPermissions() {

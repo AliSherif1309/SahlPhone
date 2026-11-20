@@ -138,4 +138,6 @@
     <string name="prayer_callback_setting">After prayer, remind me of calls I missed</string>
     <string name="weekly_setting">Weekly call summary (Saturday)</string>
     <string name="need_fullscreen">Allow Sahl Phone to show incoming calls on the full screen.</string>
+    <string name="hide_keypad">Hide keypad</string>
+    <string name="return_to_call">Return to call · %1$s</string>
 </resources>

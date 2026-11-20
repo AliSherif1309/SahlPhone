@@ -97,6 +97,9 @@ class InCallActivity : SahlActivity() {
             }.press(circle = true), LinearLayout.LayoutParams(px(64), px(64)).apply { setMargins(px(10), px(5), px(10), px(5)) })
             padBox.addView(r)
         }
+        padBox.addView(text(getString(R.string.hide_keypad), 15f, col(R.color.w_gold), true).apply {
+            gravity = Gravity.CENTER; setPadding(0, px(10), 0, px(4)); setOnClickListener { showPad(false) }
+        }.press(16f), LinearLayout.LayoutParams(-1, -2))
         root.addView(padBox, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(12) })
         root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
 
@@ -126,9 +129,7 @@ class InCallActivity : SahlActivity() {
             val c = CallManager.primary()
             if (c != null) { if (c.st() == Call.STATE_HOLDING) c.unhold() else c.hold() }
         }
-        toggle("pad", R.drawable.ic_dialpad, R.string.keypad) {
-            padBox.visibility = if (padBox.visibility == View.VISIBLE) View.GONE else View.VISIBLE; render()
-        }
+        toggle("pad", R.drawable.ic_dialpad, R.string.keypad) { showPad(padBox.visibility != View.VISIBLE) }
         activeBox.addView(grid, LinearLayout.LayoutParams(-1, -2))
         // Second row: add call · swap · merge (swap/merge only with two calls)
         extraRow = LinearLayout(this)
@@ -181,6 +182,20 @@ class InCallActivity : SahlActivity() {
         b.addView(text(getString(label), 12f, soft).apply { gravity = Gravity.CENTER; setPadding(0, px(4), 0, 0) })
         toggles[key] = btn
         grid2?.addView(b, LinearLayout.LayoutParams(0, -2, 1f))
+    }
+
+    /** Keypad on: hide the photo and extra info so everything fits; off: bring them back. */
+    private fun showPad(on: Boolean) {
+        padBox.visibility = if (on) View.VISIBLE else View.GONE
+        val info = if (on) View.GONE else View.VISIBLE
+        avatarBox.visibility = info; factsTv.visibility = info
+        if (on) { noteTv.visibility = View.GONE; warnTv.visibility = View.GONE }
+        render()
+    }
+
+    @Deprecated("Back")
+    override fun onBackPressed() {
+        if (padBox.visibility == View.VISIBLE) showPad(false) else @Suppress("DEPRECATION") super.onBackPressed()
     }
 
     private fun pill(s: String) = text(s, 13f, white).apply {

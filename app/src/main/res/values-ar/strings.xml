@@ -138,4 +138,6 @@
     <string name="prayer_callback_setting">بعد الصلاة، ذكّرني بالمكالمات الفائتة</string>
     <string name="weekly_setting">ملخص المكالمات الأسبوعي (السبت)</string>
     <string name="need_fullscreen">اسمح لسهل للهاتف بعرض المكالمات الواردة بملء الشاشة.</string>
+    <string name="hide_keypad">إخفاء لوحة الأرقام</string>
+    <string name="return_to_call">العودة للمكالمة · %1$s</string>
 </resources>
