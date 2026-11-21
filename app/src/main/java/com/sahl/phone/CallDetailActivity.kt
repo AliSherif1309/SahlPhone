@@ -54,7 +54,24 @@ class CallDetailActivity : SahlActivity() {
         }.start()
     }
 
-    private fun build(who: Caller, facts: CallerFacts, rows: List<Row>) {
+    private var dateFilter = 0          // 0 any · 1 today · 2 yesterday · 3 last 7 days · 4 last 30 days · 5 picked day
+    private var pickedDay: LocalDate? = null
+    private var last: Triple<Caller, CallerFacts, List<Row>>? = null
+
+    private fun inPeriod(t: Long): Boolean {
+        val d = Instant.ofEpochMilli(t).atZone(ZoneId.systemDefault()).toLocalDate(); val today = LocalDate.now()
+        return when (dateFilter) {
+            1 -> d == today; 2 -> d == today.minusDays(1)
+            3 -> !d.isBefore(today.minusDays(6)); 4 -> !d.isBefore(today.minusDays(29))
+            5 -> d == pickedDay; else -> true
+        }
+    }
+
+    private fun rebuild() { last?.let { build(it.first, it.second, it.third) } }
+
+    private fun build(who: Caller, facts: CallerFacts, allRows: List<Row>) {
+        last = Triple(who, facts, allRows)
+        val rows = allRows.filter { inPeriod(it.date) }
         body.removeAllViews()
         val name = who.name
         val (av, iv, letter) = avatar(104)
@@ -95,8 +112,24 @@ class CallDetailActivity : SahlActivity() {
             body.addView(c, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(12) })
         }
 
-        // Every call with this number
+        // Every call with this number — with date filters
         body.addView(label(getString(R.string.call_history)).apply { setPaddingRelative(px(8), px(18), 0, px(2)) })
+        val dates = LinearLayout(this).apply { setPaddingRelative(px(4), 0, px(4), px(4)) }
+        fun dchip(lbl: String, on: Boolean, go: () -> Unit) = dates.addView(text(lbl, 12f, if (on) col(R.color.emerald) else col(R.color.sub), on).apply {
+            background = if (on) round(col(R.color.tonal), 14f) else round(0, 14f, col(R.color.line))
+            setPadding(px(12), px(6), px(12), px(6)); setOnClickListener { go() }
+        }.press(14f), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = px(6) })
+        fun pick(i: Int) { dateFilter = i; rebuild() }
+        dchip(getString(R.string.any_time), dateFilter == 0) { pick(0) }
+        dchip(getString(R.string.today_t), dateFilter == 1) { pick(1) }
+        dchip(getString(R.string.yesterday_t), dateFilter == 2) { pick(2) }
+        dchip(getString(R.string.last_7), dateFilter == 3) { pick(3) }
+        dchip(getString(R.string.last_30), dateFilter == 4) { pick(4) }
+        dchip(if (dateFilter == 5 && pickedDay != null) pickedDay!!.format(DateTimeFormatter.ofPattern("d MMM", loc())) else getString(R.string.pick_date), dateFilter == 5) {
+            val d = pickedDay ?: LocalDate.now()
+            android.app.DatePickerDialog(this, { _, y, m, day -> pickedDay = LocalDate.of(y, m + 1, day); pick(5) }, d.year, d.monthValue - 1, d.dayOfMonth).show()
+        }
+        body.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(dates) })
         val card = card()
         var lastDay: LocalDate? = null
         for (r in rows) {
