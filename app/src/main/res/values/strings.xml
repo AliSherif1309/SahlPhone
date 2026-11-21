@@ -154,4 +154,8 @@
     <string name="call_back">Call back</string>
     <string name="remind_1h">Remind in 1 h</string>
     <string name="call_when_free_setting">When nobody answers, offer to remind me to try again</string>
+    <string name="any_time">Any time</string>
+    <string name="last_7">Last 7 days</string>
+    <string name="last_30">Last 30 days</string>
+    <string name="pick_date">Pick a day</string>
 </resources>

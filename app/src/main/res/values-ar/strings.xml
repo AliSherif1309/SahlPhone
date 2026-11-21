@@ -154,4 +154,8 @@
     <string name="call_back">معاودة الاتصال</string>
     <string name="remind_1h">ذكّرني بعد ساعة</string>
     <string name="call_when_free_setting">عند عدم الرد، اقترح تذكيري بالمحاولة مرة أخرى</string>
+    <string name="any_time">أي وقت</string>
+    <string name="last_7">آخر 7 أيام</string>
+    <string name="last_30">آخر 30 يومًا</string>
+    <string name="pick_date">اختر يومًا</string>
 </resources>

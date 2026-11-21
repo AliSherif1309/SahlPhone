@@ -35,6 +35,8 @@ class MainActivity : SahlActivity() {
     private var typed = ""
     private var missedOnly = false
     private var recentQuery = ""
+    private var dateFilter = 0                 // 0 any · 1 today · 2 yesterday · 3 last 7 days · 4 last 30 days · 5 picked day
+    private var pickedDay: LocalDate? = null
     private var blockedView = false
     private var stopped: List<Guard.Stopped> = emptyList()
 
@@ -69,6 +71,7 @@ class MainActivity : SahlActivity() {
         window.navigationBarColor = col(R.color.card)
 
         handleIntent(intent)
+        renderTabs(); show()          // keypad appears at once — it needs no data
         // Draw first, then do the background chores
         root.post {
             Updater.dailyCheck(this)
@@ -209,7 +212,11 @@ class MainActivity : SahlActivity() {
             saveCache(r)
             val c = try { Data.contacts(this) } catch (e: Exception) { emptyList() }
             val g = Guard.log(this, 100)
-            runOnUiThread { contacts = c; stopped = g; if (tab != 1 || blockedView) show(); MissedWidget.refresh(this) }
+            runOnUiThread {
+                contacts = c; stopped = g
+                when { tab == 0 -> refreshPad(); tab == 2 || blockedView -> show() }   // never rebuild the keypad
+                MissedWidget.refresh(this)
+            }
         }.start()
     }
 
@@ -257,7 +264,7 @@ class MainActivity : SahlActivity() {
                     if (ch == '0') setOnLongClickListener { typed += "+"; refreshPad(); true }
                 }.press(circle = true)
                 k.addView(text(ch.toString(), 28f, col(R.color.text)).apply { gravity = Gravity.CENTER })
-                if (letters[ch] != null) k.addView(text(letters[ch]!!, 9f, col(R.color.sub)).apply { gravity = Gravity.CENTER; letterSpacing = 0.15f })
+                k.addView(text(letters[ch] ?: " ", 9f, col(R.color.sub)).apply { gravity = Gravity.CENTER; letterSpacing = 0.15f })
                 r.addView(k, LinearLayout.LayoutParams(px(74), px(74)).apply { setMargins(px(12), px(6), px(12), px(6)) })
             }
             pad.addView(r)
@@ -296,11 +303,31 @@ class MainActivity : SahlActivity() {
         if (Guard.installed(this)) chip(R.string.stopped, blockedView) { blockedView = true; missedOnly = false; show() }
         box.addView(chips)
         if (blockedView) { stoppedView(box); content.addView(box); return }
+        // Date filter chips
+        val dates = LinearLayout(this).apply { setPaddingRelative(px(16), 0, px(16), px(6)) }
+        fun dchip(label: String, on: Boolean, go: () -> Unit) = dates.addView(text(label, 12f,
+            if (on) col(R.color.emerald) else col(R.color.sub), on).apply {
+            background = if (on) round(col(R.color.tonal), 14f) else round(0, 14f, col(R.color.line))
+            setPadding(px(12), px(6), px(12), px(6)); setOnClickListener { go() }
+        }.press(14f), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = px(6) })
+        fun pick(i: Int) { dateFilter = i; show() }
+        dchip(getString(R.string.any_time), dateFilter == 0) { pick(0) }
+        dchip(getString(R.string.today_t), dateFilter == 1) { pick(1) }
+        dchip(getString(R.string.yesterday_t), dateFilter == 2) { pick(2) }
+        dchip(getString(R.string.last_7), dateFilter == 3) { pick(3) }
+        dchip(getString(R.string.last_30), dateFilter == 4) { pick(4) }
+        dchip(if (dateFilter == 5 && pickedDay != null) pickedDay!!.format(DateTimeFormatter.ofPattern("d MMM", resources.configuration.locales[0]))
+              else getString(R.string.pick_date), dateFilter == 5) {
+            val d = pickedDay ?: LocalDate.now()
+            android.app.DatePickerDialog(this, { _, y, m, day -> pickedDay = LocalDate.of(y, m + 1, day); pick(5) },
+                d.year, d.monthValue - 1, d.dayOfMonth).show()
+        }
+        box.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(dates) })
         val (search, searchEt) = searchBox(getString(R.string.search_history)) { q -> recentQuery = q; refreshRecents?.invoke() }
         if (recentQuery.isNotEmpty()) searchEt.setText(recentQuery)
         box.addView(search, LinearLayout.LayoutParams(-1, -2).apply { setMargins(px(16), 0, px(16), px(6)) })
         val lv = ListView(this).apply { divider = null; selector = android.graphics.drawable.ColorDrawable(0); clipToPadding = false; setPadding(0, 0, 0, px(12)) }
-        val week = if (!missedOnly) weekCard() else null
+        val week = if (!missedOnly && dateFilter == 0) weekCard() else null
         if (week != null) lv.addHeaderView(week, null, false)
         box.addView(lv, LinearLayout.LayoutParams(-1, 0, 1f))
         content.addView(box)
@@ -312,7 +339,19 @@ class MainActivity : SahlActivity() {
 
     /** Recents filtered by chip and by search (name, number or a note you wrote on a call). */
     private fun filteredRecents(): List<Recent> {
+        val today = LocalDate.now()
         val base = recents.filter { !missedOnly || it.type == CallLog.Calls.MISSED_TYPE || it.type == CallLog.Calls.REJECTED_TYPE }
+            .filter { r ->
+                val d = dayOf(r.date)
+                when (dateFilter) {
+                    1 -> d == today
+                    2 -> d == today.minusDays(1)
+                    3 -> !d.isBefore(today.minusDays(6))
+                    4 -> !d.isBefore(today.minusDays(29))
+                    5 -> d == pickedDay
+                    else -> true
+                }
+            }
         val q = recentQuery.trim()
         if (q.isEmpty()) return base
         val words = Norm.text(q).split(' ').filter { it.isNotBlank() }
