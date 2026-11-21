@@ -140,4 +140,18 @@
     <string name="need_fullscreen">اسمح لسهل للهاتف بعرض المكالمات الواردة بملء الشاشة.</string>
     <string name="hide_keypad">إخفاء لوحة الأرقام</string>
     <string name="return_to_call">العودة للمكالمة · %1$s</string>
+    <string name="search_history">ابحث بالاسم أو الرقم أو الملاحظة</string>
+    <string name="followups">متابعة المكالمات</string>
+    <string name="no_answer">%1$s لم يرد</string>
+    <string name="was_busy">%1$s مشغول</string>
+    <string name="try_again_q">هل أذكّرك بالمحاولة مرة أخرى؟</string>
+    <string name="call_again">اتصل مرة أخرى</string>
+    <string name="missed_calls">المكالمات الفائتة</string>
+    <string name="missed_n">%1$d مكالمات فائتة</string>
+    <string name="missed_from">مكالمة فائتة من %1$s</string>
+    <string name="last_from">آخرها: %1$s</string>
+    <string name="tap_to_see">اضغط لرؤية المكالمات الأخيرة</string>
+    <string name="call_back">معاودة الاتصال</string>
+    <string name="remind_1h">ذكّرني بعد ساعة</string>
+    <string name="call_when_free_setting">عند عدم الرد، اقترح تذكيري بالمحاولة مرة أخرى</string>
 </resources>

@@ -34,6 +34,7 @@ class MainActivity : SahlActivity() {
     private var recents: List<Recent> = emptyList()
     private var typed = ""
     private var missedOnly = false
+    private var recentQuery = ""
     private var blockedView = false
     private var stopped: List<Guard.Stopped> = emptyList()
 
@@ -68,9 +69,12 @@ class MainActivity : SahlActivity() {
         window.navigationBarColor = col(R.color.card)
 
         handleIntent(intent)
-        Updater.dailyCheck(this)
-        WeeklySummary.schedule(this)
-        if (!crashOpen && !granted()) askPermissions()
+        // Draw first, then do the background chores
+        root.post {
+            Updater.dailyCheck(this)
+            WeeklySummary.schedule(this)
+            if (!crashOpen && !granted()) askPermissions()
+        }
     }
 
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleIntent(intent); if (::content.isInitialized) show() }
@@ -84,8 +88,11 @@ class MainActivity : SahlActivity() {
 
     override fun onResume() {
         super.onResume()
-        renderBanner(); renderTabs(); load()
-        CallManager.listeners.add(callListener); renderCallBar()
+        renderTabs(); renderCallBar()
+        CallManager.listeners.add(callListener)
+        content.post { renderBanner(); load() }
+        // Opening the app clears the missed-call notice
+        if (tab == 1) Missed.clear(this)
     }
 
     override fun onPause() { super.onPause(); CallManager.listeners.remove(callListener) }
@@ -159,7 +166,7 @@ class MainActivity : SahlActivity() {
             val on = i == tab
             val b = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-                setOnClickListener { if (tab != i) { tab = i; renderTabs(); show() } }
+                setOnClickListener { if (tab != i) { tab = i; renderTabs(); show(); if (i == 1) Missed.clear(this@MainActivity) } }
             }
             val pillBox = FrameLayout(this).apply { background = if (on) round(col(R.color.tonal), 16f) else null }
             pillBox.addView(ImageView(this).apply {
@@ -285,15 +292,40 @@ class MainActivity : SahlActivity() {
         }.press(18f), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = px(8) })
         chip(R.string.all, !missedOnly && !blockedView) { missedOnly = false; blockedView = false; show() }
         chip(R.string.missed, missedOnly) { missedOnly = true; blockedView = false; show() }
+        Missed.clear(this)
         if (Guard.installed(this)) chip(R.string.stopped, blockedView) { blockedView = true; missedOnly = false; show() }
         box.addView(chips)
         if (blockedView) { stoppedView(box); content.addView(box); return }
-        val list = recents.filter { !missedOnly || it.type == CallLog.Calls.MISSED_TYPE || it.type == CallLog.Calls.REJECTED_TYPE }
-        if (list.isEmpty()) { box.addView(empty(R.drawable.ic_history, R.string.no_recents), LinearLayout.LayoutParams(-1, 0, 1f)); content.addView(box); return }
+        val (search, searchEt) = searchBox(getString(R.string.search_history)) { q -> recentQuery = q; refreshRecents?.invoke() }
+        if (recentQuery.isNotEmpty()) searchEt.setText(recentQuery)
+        box.addView(search, LinearLayout.LayoutParams(-1, -2).apply { setMargins(px(16), 0, px(16), px(6)) })
         val lv = ListView(this).apply { divider = null; selector = android.graphics.drawable.ColorDrawable(0); clipToPadding = false; setPadding(0, 0, 0, px(12)) }
-        if (!missedOnly) lv.addHeaderView(weekCard(), null, false)
-        lv.adapter = object : BaseAdapter() {
-            override fun getCount() = list.size
+        val week = if (!missedOnly) weekCard() else null
+        if (week != null) lv.addHeaderView(week, null, false)
+        box.addView(lv, LinearLayout.LayoutParams(-1, 0, 1f))
+        content.addView(box)
+        refreshRecents = { lv.adapter = recentsAdapter(filteredRecents()); week?.visibility = if (recentQuery.isBlank()) View.VISIBLE else View.GONE }
+        refreshRecents?.invoke()
+    }
+
+    private var refreshRecents: (() -> Unit)? = null
+
+    /** Recents filtered by chip and by search (name, number or a note you wrote on a call). */
+    private fun filteredRecents(): List<Recent> {
+        val base = recents.filter { !missedOnly || it.type == CallLog.Calls.MISSED_TYPE || it.type == CallLog.Calls.REJECTED_TYPE }
+        val q = recentQuery.trim()
+        if (q.isEmpty()) return base
+        val words = Norm.text(q).split(' ').filter { it.isNotBlank() }
+        val dq = Norm.digits(q)
+        val noteKeys = CallNotes.numbersMatching(this, q)
+        return base.filter { r ->
+            val name = Norm.text(Lookup.caller(this, r.number).name ?: r.name ?: "")
+            words.all { name.contains(it) } || (dq.length >= 3 && Norm.digits(r.number).contains(dq)) || Norm.phoneKey(r.number) in noteKeys
+        }
+    }
+
+    private fun recentsAdapter(list: List<Recent>): BaseAdapter {
+        return object : BaseAdapter() {            override fun getCount() = list.size
             override fun getItem(p: Int) = list[p]
             override fun getItemId(p: Int) = p.toLong()
             override fun getView(p: Int, cv: View?, parent: ViewGroup): View {
@@ -321,8 +353,6 @@ class MainActivity : SahlActivity() {
                 return outer
             }
         }
-        box.addView(lv, LinearLayout.LayoutParams(-1, 0, 1f))
-        content.addView(box)
     }
 
     /** "This week" card at the top of Recents. */

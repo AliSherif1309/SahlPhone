@@ -72,6 +72,12 @@
         <receiver android:name=".CallActionReceiver" android:exported="false" />
         <receiver android:name=".ReminderReceiver" android:exported="false" />
         <receiver android:name=".PrayerMissedReceiver" android:exported="false" />
+        <receiver android:name=".FollowupReceiver" android:exported="false" />
+        <!-- Telecom sends missed-call notices to the default phone app -->
+        <receiver android:name=".MissedCallsReceiver" android:exported="true"
+            android:permission="android.permission.BROADCAST_CALLLOG_INFO">
+            <intent-filter><action android:name="android.telecom.action.SHOW_MISSED_CALLS_NOTIFICATION" /></intent-filter>
+        </receiver>
         <receiver android:name=".WeeklyReceiver" android:exported="false" />
         <receiver android:name=".MissedWidget" android:exported="false" android:label="@string/missed_widget">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>

@@ -93,6 +93,14 @@ object CallNotes {
 
     fun get(c: Context, number: String, date: Long): String? = all(c).optString(key(number, date)).takeIf { it.isNotBlank() }
 
+    /** Phone keys of calls whose note contains the text (for searching history). */
+    fun numbersMatching(c: Context, q: String): Set<String> {
+        val t = Norm.text(q).trim(); if (t.length < 2) return emptySet()
+        val j = all(c); val out = HashSet<String>()
+        for (k in j.keys()) if (Norm.text(j.optString(k)).contains(t)) out.add(k.substringBefore('@'))
+        return out
+    }
+
     fun set(c: Context, number: String, date: Long, text: String) {
         val j = all(c)
         if (text.isBlank()) j.remove(key(number, date)) else j.put(key(number, date), text.trim())

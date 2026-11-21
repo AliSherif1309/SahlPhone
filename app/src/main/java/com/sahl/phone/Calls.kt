@@ -112,6 +112,7 @@ class SahlInCallService : InCallService() {
         try {
             if (call.details.connectTimeMillis > 0) CallNotes.offer(this, call.number())
             else if (call in CallManager.rang) PrayerMissed.onMissed(this, call.number())
+            else if (call.details.callDirection == Call.Details.DIRECTION_OUTGOING) Followup.onUnanswered(this, call)
         } catch (e: Exception) { }
         CallManager.rang.remove(call)
         if (CallManager.calls.none { it !== call && it.st() == Call.STATE_RINGING }) FlipSilence.stop()

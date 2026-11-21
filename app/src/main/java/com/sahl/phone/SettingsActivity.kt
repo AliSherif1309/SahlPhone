@@ -69,6 +69,7 @@ class SettingsActivity : SahlActivity() {
         sw2(R.string.flip_setting, "flip_silence", true)
         sw2(R.string.prayer_callback_setting, "prayer_callback", true)
         sw2(R.string.weekly_setting, "weekly_summary", true)
+        sw2(R.string.call_when_free_setting, "call_when_free", true)
 
         // Call Guard (in Sahl Tools) and call notes
         val gd = card(R.string.call_guard)
