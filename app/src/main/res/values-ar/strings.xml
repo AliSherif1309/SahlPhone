@@ -158,4 +158,5 @@
     <string name="last_7">آخر 7 أيام</string>
     <string name="last_30">آخر 30 يومًا</string>
     <string name="pick_date">اختر يومًا</string>
+    <string name="found_in_note">يطابق ملاحظة كتبتها</string>
 </resources>

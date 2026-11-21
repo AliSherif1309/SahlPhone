@@ -158,4 +158,5 @@
     <string name="last_7">Last 7 days</string>
     <string name="last_30">Last 30 days</string>
     <string name="pick_date">Pick a day</string>
+    <string name="found_in_note">Matches a note you wrote</string>
 </resources>

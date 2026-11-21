@@ -52,6 +52,32 @@ class UnionProvider : ContentProvider() {
                     }
                     out
                 }
+                // Sahl Search: numbers/names in your call history and your call notes
+                "search" -> {
+                    val out = MatrixCursor(arrayOf("kind", "title", "subtitle", "date", "action", "key", "value", "package"))
+                    val q = uri.getQueryParameter("q") ?: return out
+                    val t = Norm.text(q).trim(); val dq = Norm.digits(q)
+                    if (t.length < 2) return out
+                    val noteKeys = CallNotes.numbersMatching(c, q)
+                    val seen = HashSet<String>()
+                    c.contentResolver.query(CallLog.Calls.CONTENT_URI, arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME, CallLog.Calls.DATE),
+                        null, null, CallLog.Calls.DATE + " DESC")?.use {
+                        var n = 0
+                        while (it.moveToNext() && n++ < 3000 && out.count < 12) {
+                            val num = it.getString(0) ?: continue; val k = Norm.phoneKey(num)
+                            if (k.isEmpty() || k in seen) continue
+                            val name = it.getString(1) ?: ""
+                            val byNote = k in noteKeys
+                            if (byNote || (dq.length >= 3 && Norm.digits(num).contains(dq)) || (name.isNotBlank() && Norm.text(name).contains(t))) {
+                                seen.add(k)
+                                out.addRow(arrayOf<Any>(if (byNote) "note" else "call", name.ifBlank { num },
+                                    if (byNote) Sahl.wrap(c).getString(R.string.found_in_note) else num, it.getLong(2),
+                                    "com.sahl.phone.action.DETAILS", "number", num, c.packageName))
+                            }
+                        }
+                    }
+                    out
+                }
                 else -> null
             }
         } catch (e: Exception) { null }
