@@ -136,7 +136,8 @@ class SettingsActivity : SahlActivity() {
             orientation = LinearLayout.VERTICAL; background = round(col(R.color.card), 22f)
             setPadding(px(16), px(12), px(16), px(12))
         }
-        c.addView(text(getString(title), 13f, col(R.color.emerald), true))
+        val goldHdr = if ((resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES) 0xFFF5C84C.toInt() else 0xFFB88922.toInt()
+        c.addView(text(getString(title), 13f, goldHdr, true))
         body.addView(c, LinearLayout.LayoutParams(-1, -2).apply { topMargin = px(12) })
         return c
     }
