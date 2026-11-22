@@ -48,12 +48,18 @@ class InCallActivity : SahlActivity() {
     private var prox: PowerManager.WakeLock? = null
     private var dialingSince = 0L
     private var dialingCall: Call? = null
+    private var visible = false
 
     private val listener: () -> Unit = { render() }
     private val tick = object : Runnable { override fun run() { renderStatus(); main.postDelayed(this, 1000) } }
+    private val finishTask = Runnable {
+        if (CallManager.calls.none { it.st() != Call.STATE_DISCONNECTED }) finishAndRemoveTask()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CallManager.listeners.add(listener)
+        if (CallManager.primary() == null) { finishAndRemoveTask(); return }
         if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(true); setTurnScreenOn(true) }
         else @Suppress("DEPRECATION") window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -244,27 +250,39 @@ class InCallActivity : SahlActivity() {
 
     override fun onResume() {
         super.onResume()
-        CallManager.listeners.add(listener)
+        visible = true
+        if (CallManager.calls.none { it.st() != Call.STATE_DISCONNECTED }) { finishAndRemoveTask(); return }
         main.post(tick)
         render()
     }
 
     override fun onPause() {
         super.onPause()
-        CallManager.listeners.remove(listener)
+        visible = false
         main.removeCallbacks(tick)
     }
 
-    override fun onDestroy() { super.onDestroy(); prox?.release() }
+    override fun onDestroy() {
+        super.onDestroy()
+        CallManager.listeners.remove(listener)
+        main.removeCallbacks(finishTask)
+        main.removeCallbacks(tick)
+        prox?.release()
+    }
 
     private fun render() {
+        if (isFinishing || isDestroyed) return
         val call = CallManager.primary()
-        if (call == null) {
+        if (call == null || CallManager.calls.none { it.st() != Call.STATE_DISCONNECTED }) {
             statusTv.text = getString(R.string.ended)
             prox?.release()
-            main.postDelayed({ if (CallManager.primary() == null) finishAndRemoveTask() }, 900)
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            main.removeCallbacks(finishTask)
+            if (!visible) finishAndRemoveTask() else main.postDelayed(finishTask, 900)
             return
         }
+        main.removeCallbacks(finishTask)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val num = call.number()
         if (num != shownNumber) {
             shownNumber = num

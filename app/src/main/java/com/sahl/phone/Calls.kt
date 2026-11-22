@@ -86,7 +86,7 @@ object CallManager {
     /** The call the screen should show. */
     fun primary(): Call? =
         calls.firstOrNull { it.st() == Call.STATE_RINGING }
-            ?: calls.firstOrNull { it.st() in listOf(Call.STATE_ACTIVE, Call.STATE_DIALING, Call.STATE_CONNECTING, Call.STATE_SELECT_PHONE_ACCOUNT) }
+            ?: calls.firstOrNull { it.st() in listOf(Call.STATE_ACTIVE, Call.STATE_DIALING, Call.STATE_CONNECTING, Call.STATE_SELECT_PHONE_ACCOUNT, Call.STATE_HOLDING) }
             ?: calls.firstOrNull()
 }
 
@@ -129,7 +129,14 @@ class SahlInCallService : InCallService() {
         CallManager.changed()
     }
 
-    override fun onDestroy() { super.onDestroy(); if (CallManager.service === this) CallManager.service = null }
+    override fun onDestroy() {
+        super.onDestroy()
+        if (CallManager.service === this) {
+            CallManager.service = null
+            CallManager.calls.clear()
+            CallManager.changed()
+        }
+    }
 
     companion object {
         fun openScreen(c: Context) {
