@@ -2,12 +2,24 @@ package com.sahl.phone
 
 import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.provider.BlockedNumberContract
 import android.provider.CallLog
+import android.provider.ContactsContract
+import android.provider.ContactsContract.CommonDataKinds.Event
+import android.provider.ContactsContract.CommonDataKinds.GroupMembership
 import android.provider.ContactsContract.CommonDataKinds.Phone
+import android.provider.ContactsContract.Contacts
+import android.provider.ContactsContract.Groups
 
 data class Entry(val contactId: Long, val name: String, val number: String, val photo: String?, val starred: Boolean,
                  val key: String, val t9: String, val digits: String)
+
+data class Person(
+    val id: Long, val lookup: String, val name: String, val photo: String?,
+    val starred: Boolean, val numbers: List<String>,
+    val key: String, val section: String, val digits: String
+)
 
 data class Recent(val ids: List<Long>, val number: String, val name: String?, val type: Int, val date: Long,
                   val duration: Long, val count: Int)
@@ -35,6 +47,80 @@ object Data {
         out.sortWith(compareBy<Entry>({ Norm.group(Norm.section(it.name)) }, { it.key }))
         return out
     }
+
+    /** One row per contact — mirrors Sahl Contacts Repo.list() criteria. */
+    fun people(c: Context): List<Person> {
+        val cr = c.contentResolver
+        val nums = HashMap<Long, MutableList<String>>()
+        cr.query(Phone.CONTENT_URI, arrayOf(Phone.CONTACT_ID, Phone.NUMBER), null, null, null)?.use {
+            while (it.moveToNext()) {
+                val n = it.getString(1) ?: continue
+                val l = nums.getOrPut(it.getLong(0)) { mutableListOf() }
+                if (l.none { x -> Norm.phoneKey(x) == Norm.phoneKey(n) }) l.add(n)
+            }
+        }
+        val out = ArrayList<Person>()
+        cr.query(Contacts.CONTENT_URI,
+            arrayOf(Contacts._ID, Contacts.LOOKUP_KEY, Contacts.DISPLAY_NAME_PRIMARY, Contacts.PHOTO_THUMBNAIL_URI, Contacts.STARRED),
+            null, null, null)?.use {
+            while (it.moveToNext()) {
+                val id = it.getLong(0)
+                val n = nums[id] ?: emptyList()
+                val name = it.getString(2)?.takeIf { s -> s.isNotBlank() } ?: n.firstOrNull() ?: continue
+                val sec = Norm.section(name)
+                val dig = n.joinToString(" ") { x -> Norm.digits(x) + " " + Norm.phoneKey(x) }
+                out.add(Person(id, it.getString(1) ?: "", name, it.getString(3), it.getInt(4) == 1, n,
+                    Norm.text(name), sec, dig))
+            }
+        }
+        out.sortWith(compareBy<Person>({ Norm.group(it.section) }, { it.key }))
+        return out
+    }
+
+    fun groups(c: Context): Map<String, Set<Long>> {
+        val byTitle = LinkedHashMap<String, MutableSet<Long>>()
+        c.contentResolver.query(Groups.CONTENT_URI, arrayOf(Groups._ID, Groups.TITLE),
+            "${Groups.DELETED}=0", null, Groups.TITLE)?.use {
+            while (it.moveToNext()) {
+                val t = it.getString(1)?.trim() ?: continue
+                if (t.isEmpty() || t.startsWith("System Group") || t.startsWith("Starred in") || t == "My Contacts") continue
+                if (t.startsWith("Restored from") || t.startsWith("تمت الاستعادة")) continue
+                byTitle.getOrPut(t) { mutableSetOf() }.add(it.getLong(0))
+            }
+        }
+        return byTitle
+    }
+
+    fun members(c: Context): Map<Long, Set<Long>> {
+        val m = HashMap<Long, MutableSet<Long>>()
+        c.contentResolver.query(ContactsContract.Data.CONTENT_URI, arrayOf(ContactsContract.Data.CONTACT_ID, GroupMembership.GROUP_ROW_ID),
+            "${ContactsContract.Data.MIMETYPE}=?", arrayOf(GroupMembership.CONTENT_ITEM_TYPE), null)?.use {
+            while (it.moveToNext()) m.getOrPut(it.getLong(1)) { mutableSetOf() }.add(it.getLong(0))
+        }
+        return m
+    }
+
+    fun birthdaysThisMonth(c: Context): Set<Long> {
+        val m = "%02d".format(java.time.LocalDate.now().monthValue)
+        val out = HashSet<Long>()
+        c.contentResolver.query(ContactsContract.Data.CONTENT_URI, arrayOf(ContactsContract.Data.CONTACT_ID, Event.START_DATE),
+            "${ContactsContract.Data.MIMETYPE}=? AND ${Event.TYPE}=?", arrayOf(Event.CONTENT_ITEM_TYPE, Event.TYPE_BIRTHDAY.toString()), null)?.use {
+            while (it.moveToNext()) {
+                val d = (it.getString(1) ?: continue).trim()
+                val mm = if (d.startsWith("--")) d.drop(2).take(2) else d.drop(5).take(2)
+                if (mm == m) out.add(it.getLong(0))
+            }
+        }
+        return out
+    }
+
+    fun hiddenLookups(c: Context): Set<String> = try {
+        val out = HashSet<String>()
+        c.contentResolver.query(Uri.parse("${Sahl.CONTACTS_UNION}/hidden"), null, null, null, null)?.use {
+            while (it.moveToNext()) it.getString(0)?.let { k -> out.add(k) }
+        }
+        out
+    } catch (e: Exception) { emptySet() }
 
     fun recents(c: Context, limit: Int = 300): List<Recent> {
         val out = ArrayList<Recent>()

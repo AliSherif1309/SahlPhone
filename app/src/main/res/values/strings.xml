@@ -159,4 +159,16 @@
     <string name="last_30">Last 30 days</string>
     <string name="pick_date">Pick a day</string>
     <string name="found_in_note">Matches a note you wrote</string>
+    <string name="whatsapp">WhatsApp</string>
+    <string name="no_whatsapp">WhatsApp is not installed</string>
+    <string name="share">Share</string>
+    <string name="edit_contact">Edit contact</string>
+    <string name="recent">Recent</string>
+    <string name="no_results">No results</string>
+    <string name="contacts_count">%1$d contacts</string>
+    <string name="sg_birthdays">Birthdays this month</string>
+    <string name="sg_international">International</string>
+    <string name="sg_quiet">Favorites you haven’t called</string>
+    <string name="sg_no_photo">No photo</string>
+    <string name="sg_no_number">No number</string>
 </resources>

@@ -159,4 +159,16 @@
     <string name="last_30">آخر 30 يومًا</string>
     <string name="pick_date">اختر يومًا</string>
     <string name="found_in_note">يطابق ملاحظة كتبتها</string>
+    <string name="whatsapp">واتساب</string>
+    <string name="no_whatsapp">واتساب غير مثبت</string>
+    <string name="share">مشاركة</string>
+    <string name="edit_contact">تعديل جهة الاتصال</string>
+    <string name="recent">الأخيرة</string>
+    <string name="no_results">لا توجد نتائج</string>
+    <string name="contacts_count">%1$d جهة اتصال</string>
+    <string name="sg_birthdays">أعياد ميلاد هذا الشهر</string>
+    <string name="sg_international">أرقام دولية</string>
+    <string name="sg_quiet">مفضلة لم تتصل بها</string>
+    <string name="sg_no_photo">بدون صورة</string>
+    <string name="sg_no_number">بدون رقم</string>
 </resources>
