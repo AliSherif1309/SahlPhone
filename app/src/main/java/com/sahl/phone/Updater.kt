@@ -58,4 +58,24 @@ object Updater {
     fun downloadAndInstall(ctx: Context, r: Release) {
         ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(r.apkUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
+
+    private var checkedOnStart = false
+
+    /** Checks GitHub on app open and shows a pop-up dialog once per run if a newer release exists. */
+    fun checkOnStart(a: android.app.Activity) {
+        if (checkedOnStart) return
+        checkedOnStart = true
+        Thread {
+            val r = fetchNewer() ?: return@Thread
+            a.runOnUiThread {
+                if (a.isFinishing || a.isDestroyed) return@runOnUiThread
+                android.app.AlertDialog.Builder(a)
+                    .setTitle(a.getString(R.string.update_available, r.name))
+                    .setMessage(r.notes.ifBlank { a.getString(R.string.install_update) })
+                    .setPositiveButton(R.string.install) { _, _ -> downloadAndInstall(a, r) }
+                    .setNegativeButton(R.string.later, null)
+                    .show()
+            }
+        }.start()
+    }
 }

@@ -78,6 +78,7 @@ class MainActivity : SahlActivity() {
         // Draw first, then do the background chores
         root.post {
             Updater.dailyCheck(this)
+            Updater.checkOnStart(this)
             WeeklySummary.schedule(this)
             if (!crashOpen && !granted()) askPermissions()
         }
