@@ -128,6 +128,16 @@ object WeeklySummary {
     private var cached: Week? = null
     private var cachedAt = 0L
 
+    fun peek(): Week? {
+        val now = System.currentTimeMillis()
+        return cached?.takeIf { now - cachedAt < 5 * 60_000L }
+    }
+
+    fun invalidate() {
+        cached = null
+        cachedAt = 0L
+    }
+
     fun compute(c: Context): Week {
         val now = System.currentTimeMillis()
         cached?.let { if (now - cachedAt < 5 * 60_000L) return it }
