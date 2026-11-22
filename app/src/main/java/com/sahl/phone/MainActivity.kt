@@ -15,6 +15,7 @@ import android.provider.CallLog
 import android.provider.ContactsContract
 import android.telecom.TelecomManager
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
@@ -31,6 +32,13 @@ class MainActivity : SahlActivity() {
     private lateinit var callBar: LinearLayout
     private val callListener: () -> Unit = { renderCallBar() }
     private var contacts: List<Entry> = emptyList()
+    private var people: List<Person> = emptyList()
+    private var groups: Map<String, Set<Long>> = emptyMap()
+    private var members: Map<Long, Set<Long>> = emptyMap()
+    private var bdayIds: Set<Long> = emptySet()
+    private var hiddenLookups: Set<String> = emptySet()
+    private var groupFilter: String? = null
+    private var contactQuery = ""
     private var recents: List<Recent> = emptyList()
     private var typed = ""
     private var missedOnly = false
@@ -253,14 +261,20 @@ class MainActivity : SahlActivity() {
             }
             saveCache(r)
             val c = try { Data.contacts(this) } catch (e: Exception) { emptyList() }
+            val ppl = try { Data.people(this) } catch (e: Exception) { emptyList() }
+            val grp = try { Data.groups(this) } catch (e: Exception) { emptyMap() }
+            val mem = try { Data.members(this) } catch (e: Exception) { emptyMap() }
+            val bd = try { Data.birthdaysThisMonth(this) } catch (e: Exception) { emptySet() }
+            val hid = Data.hiddenLookups(this)
             val g = Guard.log(this, 100)
             runOnUiThread {
-                val contactsChanged = c != contacts
+                val peopleChanged = ppl != people || grp != groups || mem != members || hid != hiddenLookups
                 val stoppedChanged = g != stopped
-                contacts = c; stopped = g
+                contacts = c; people = ppl; groups = grp; members = mem; bdayIds = bd; hiddenLookups = hid; stopped = g
+                if (groupFilter != null && !groupFilter!!.startsWith("*") && !groups.containsKey(groupFilter)) groupFilter = null
                 when {
                     tab == 0 -> refreshPad()
-                    tab == 2 && contactsChanged -> show()
+                    tab == 2 && peopleChanged -> show()
                     tab == 1 && blockedView && stoppedChanged -> show()
                 }   // never rebuild the keypad
                 MissedWidget.refresh(this)
@@ -557,43 +571,270 @@ class MainActivity : SahlActivity() {
             .setNegativeButton(R.string.cancel, null).show()
     }
 
-    // ---------- Contacts ----------
+    // ---------- Contacts (mirrors Sahl Contacts criteria & behaviors) ----------
+    private fun whatsapp(n: String) {
+        val d = Norm.international(n, Sahl.countryCode(this))
+        val pkg = listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull { packageInstalled(it) }
+        if (pkg == null) { toast(R.string.no_whatsapp); return }
+        go(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$d")).setPackage(pkg))
+    }
+
+    private fun shareContact(lookup: String) {
+        if (lookup.isEmpty()) return
+        val uri = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_VCARD_URI, lookup)
+        val i = Intent(Intent.ACTION_SEND).setType(ContactsContract.Contacts.CONTENT_VCARD_TYPE)
+            .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try { startActivity(Intent.createChooser(i, getString(R.string.share))) } catch (e: Exception) { }
+    }
+
+    private fun pickNumber(title: String, iconRes: Int, numbers: List<String>, go: (String) -> Unit) {
+        if (numbers.size == 1) { go(numbers[0]); return }
+        sheet(title, numbers.map { num -> Triple(iconRes, num) { go(num) } })
+    }
+
+    private fun openContact(p: Person) {
+        if (packageInstalled("com.sahl.contacts")) {
+            go(Intent("com.sahl.contacts.action.OPEN").setPackage("com.sahl.contacts").putExtra("id", p.id))
+            return
+        }
+        when {
+            p.numbers.size == 1 -> call(p.numbers[0])
+            p.numbers.size > 1 -> pickNumber(p.name, R.drawable.ic_call, p.numbers) { call(it) }
+            else -> go(Intent(Intent.ACTION_VIEW, ContactsContract.Contacts.getLookupUri(p.id, p.lookup)))
+        }
+    }
+
+    private fun contactActions(p: Person) {
+        val items = ArrayList<Triple<Int, String, () -> Unit>>()
+        if (p.numbers.isNotEmpty()) {
+            items.add(Triple(R.drawable.ic_call, getString(R.string.call)) { pickNumber(getString(R.string.call), R.drawable.ic_call, p.numbers) { call(it) } })
+            items.add(Triple(R.drawable.ic_chat, getString(R.string.message)) { pickNumber(getString(R.string.message), R.drawable.ic_chat, p.numbers) { sms(it) } })
+            items.add(Triple(R.drawable.ic_whatsapp, getString(R.string.whatsapp)) { pickNumber(getString(R.string.whatsapp), R.drawable.ic_whatsapp, p.numbers) { whatsapp(it) } })
+            items.add(Triple(R.drawable.ic_bell, getString(R.string.remind_me)) { pickNumber(getString(R.string.remind_me), R.drawable.ic_bell, p.numbers) { remind(it, p.name) } })
+            items.add(Triple(R.drawable.ic_copy, getString(R.string.copy)) {
+                pickNumber(getString(R.string.copy), R.drawable.ic_copy, p.numbers) {
+                    getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("number", it)); toast(R.string.copied)
+                }
+            })
+        }
+        items.add(Triple(R.drawable.ic_edit, getString(R.string.edit_contact)) {
+            go(Intent(Intent.ACTION_EDIT, ContactsContract.Contacts.getLookupUri(p.id, p.lookup)))
+        })
+        items.add(Triple(R.drawable.ic_share, getString(R.string.share)) { shareContact(p.lookup) })
+        sheet(p.name, items)
+    }
+
     private fun contactsView() {
-        if (contacts.isEmpty()) { content.addView(empty(R.drawable.ic_people, R.string.no_contacts)); return }
+        val visibleAll = people.filter { it.lookup !in hiddenLookups }
+        if (visibleAll.isEmpty()) { content.addView(empty(R.drawable.ic_people, R.string.no_contacts)); return }
+
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val lv = ListView(this).apply { divider = null; selector = android.graphics.drawable.ColorDrawable(0) }
-        val favs = contacts.filter { it.starred }.distinctBy { it.contactId }
-        val strip = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        if (favs.isNotEmpty()) {
-            strip.addView(label(getString(R.string.favorites)).apply { setPaddingRelative(px(20), px(6), 0, px(4)) })
-            val row = LinearLayout(this).apply { setPadding(px(12), 0, px(12), px(4)) }
-            for (e in favs) {
-                val cell = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(px(6), px(6), px(6), px(6))
-                    setOnClickListener { call(e.number) }
-                }.press(18f)
-                val (f, iv, letter) = avatar(56)
-                f.background = oval(avatarColor(e.name)); letter.text = initial(e.name)
-                Thumbs.load(this, e.photo, iv, letter)
-                cell.addView(f)
-                cell.addView(text(e.name.substringBefore(' '), 12f).apply { maxLines = 1; gravity = Gravity.CENTER; setPadding(0, px(6), 0, 0) },
-                    LinearLayout.LayoutParams(px(68), -2))
-                row.addView(cell)
+        val chips = LinearLayout(this).apply { setPadding(px(12), px(4), px(12), px(4)) }
+        val body = FrameLayout(this)
+        val lv = ListView(this).apply {
+            divider = null; clipToPadding = false; selector = android.graphics.drawable.ColorDrawable(0)
+            setPadding(0, 0, 0, px(24)); isVerticalScrollBarEnabled = false
+        }
+        val top = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        lv.addHeaderView(top, null, false)
+        val count = text("", 12f, col(R.color.sub)).apply { gravity = Gravity.CENTER; setPadding(0, px(14), 0, px(14)) }
+        lv.addFooterView(count, null, false)
+
+        val emptyBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; visibility = View.GONE
+            addView(icon(R.drawable.ic_search, col(R.color.line), 64))
+            addView(text(getString(R.string.no_results), 15f, col(R.color.sub)).apply { gravity = Gravity.CENTER; setPadding(0, px(12), 0, 0) })
+        }
+        val index = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+        val bubble = text("", 34f, 0xFFFFFFFF.toInt(), true).apply {
+            gravity = Gravity.CENTER; background = oval(col(R.color.emerald)); visibility = View.GONE; elevation = 6f * dp
+        }
+        body.addView(lv, FrameLayout.LayoutParams(-1, -1))
+        body.addView(emptyBox, FrameLayout.LayoutParams(-1, -1))
+        body.addView(index, FrameLayout.LayoutParams(px(26), -1, Gravity.END).apply { topMargin = px(8); bottomMargin = px(16) })
+        body.addView(bubble, FrameLayout.LayoutParams(px(76), px(76), Gravity.CENTER))
+
+        val talkedKeys = recents.mapNotNull { it.number.takeIf(String::isNotBlank)?.let(Norm::phoneKey) }.toSet()
+        val byKey = HashMap<String, Person>()
+        for (p in visibleAll) for (n in p.numbers) byKey[Norm.phoneKey(n)] = p
+        val recentPeople = recents.mapNotNull { byKey[Norm.phoneKey(it.number)] }.distinctBy { it.id }.take(12)
+
+        fun smartGroups() = listOf(
+            "*bday" to R.string.sg_birthdays, "*intl" to R.string.sg_international, "*quiet" to R.string.sg_quiet,
+            "*nophoto" to R.string.sg_no_photo, "*nonumber" to R.string.sg_no_number)
+
+        fun smartMatch(key: String, p: Person): Boolean = when (key) {
+            "*bday" -> p.id in bdayIds
+            "*intl" -> p.numbers.any { Countries.of(it, Sahl.countryCode(this), false) != null }
+            "*quiet" -> talkedKeys.isNotEmpty() && p.numbers.isNotEmpty() && p.numbers.none { Norm.phoneKey(it) in talkedKeys } && p.starred
+            "*nophoto" -> p.photo == null
+            "*nonumber" -> p.numbers.isEmpty()
+            else -> false
+        }
+
+        fun buildTop() {
+            top.removeAllViews()
+            fun strip(title: Int, list: List<Person>) {
+                if (list.isEmpty()) return
+                top.addView(label(getString(title)).apply { setPaddingRelative(px(20), px(10), 0, px(6)) })
+                val row = LinearLayout(this).apply { setPadding(px(12), 0, px(12), px(6)) }
+                for (p in list) {
+                    val cell = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                        setPadding(px(6), px(6), px(6), px(6))
+                        setOnClickListener { openContact(p) }
+                        setOnLongClickListener { contactActions(p); true }
+                    }.press(18f)
+                    val (f, iv, letter) = avatar(58)
+                    f.background = oval(avatarColor(p.name)); letter.text = initial(p.name)
+                    if (letter.text.isEmpty()) f.addView(ImageView(this).apply {
+                        setImageResource(R.drawable.ic_people); imageTintList = ColorStateList.valueOf(0xCCFFFFFF.toInt())
+                    }, FrameLayout.LayoutParams(px(22), px(22), Gravity.CENTER))
+                    Thumbs.load(this, p.photo, iv, letter)
+                    cell.addView(f)
+                    cell.addView(text(p.name.substringBefore(' '), 12f).apply {
+                        maxLines = 1; gravity = Gravity.CENTER; setPadding(0, px(6), 0, 0)
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                    }, LinearLayout.LayoutParams(px(70), -2))
+                    row.addView(cell)
+                }
+                top.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(row) })
             }
-            strip.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(row) })
+            strip(R.string.favorites, visibleAll.filter { it.starred })
+            strip(R.string.recent, recentPeople)
         }
-        lv.addHeaderView(strip, null, false)
-        val (search, _) = searchBox(getString(R.string.search)) { q ->
-            val words = Norm.text(q).split(' ').filter { it.isNotBlank() }
-            val dq = Norm.digits(q)
-            val list = contacts.filter { e -> words.isEmpty() || words.all { e.key.contains(it) } || (dq.length >= 3 && e.digits.contains(dq)) }
-            for (i in 0 until strip.childCount) strip.getChildAt(i).visibility = if (q.isBlank()) View.VISIBLE else View.GONE
-            lv.adapter = EntryAdapter(list)
+        buildTop()
+
+        var shown: List<Person> = emptyList()
+        val adapter = PeopleAdapter { shown }
+        lv.adapter = adapter
+
+        fun buildIndex() {
+            index.removeAllViews()
+            if (contactQuery.isNotBlank()) return
+            val starts = LinkedHashMap<String, Int>()
+            shown.forEachIndexed { i, p -> if (p.section !in starts) starts[p.section] = i }
+            if (starts.size < 2) return
+            val keys = starts.keys.toList()
+            val step = Math.ceil(keys.size / 24.0).toInt().coerceAtLeast(1)
+            val shownKeys = keys.filterIndexed { i, _ -> i % step == 0 }
+            for (k in shownKeys) index.addView(text(k, 11f, col(R.color.sub), true).apply {
+                gravity = Gravity.CENTER; maxLines = 1; includeFontPadding = false
+            }, LinearLayout.LayoutParams(-1, 0, 1f))
+            index.setOnTouchListener { v, e ->
+                if (e.action == MotionEvent.ACTION_DOWN || e.action == MotionEvent.ACTION_MOVE) {
+                    val i = ((e.y / v.height) * keys.size).toInt().coerceIn(0, keys.size - 1)
+                    lv.setSelection(starts[keys[i]]!! + lv.headerViewsCount)
+                    bubble.text = keys[i]; bubble.visibility = View.VISIBLE
+                } else bubble.visibility = View.GONE
+                true
+            }
         }
+
+        fun filter() {
+            val words = Norm.text(contactQuery).split(' ').filter { it.isNotBlank() }
+            val dq = Norm.digits(contactQuery)
+            val gfKey = groupFilter
+            val smart = gfKey != null && gfKey.startsWith("*")
+            val inGroup = if (smart) null else gfKey?.let { t -> groups[t]?.flatMap { members[it] ?: emptySet() }?.toSet() ?: emptySet() }
+            shown = visibleAll.filter { p ->
+                (inGroup == null || p.id in inGroup) && (!smart || smartMatch(gfKey!!, p)) &&
+                    (words.isEmpty() || words.all { w -> p.key.contains(w) } || (dq.length >= 3 && p.digits.contains(dq)))
+            }
+            val showTop = contactQuery.isBlank() && groupFilter == null
+            for (i in 0 until top.childCount) top.getChildAt(i).visibility = if (showTop) View.VISIBLE else View.GONE
+            adapter.notifyDataSetChanged()
+            emptyBox.visibility = if (shown.isEmpty()) View.VISIBLE else View.GONE
+            count.text = getString(R.string.contacts_count, shown.size)
+            buildIndex()
+        }
+
+        fun buildChips() {
+            chips.removeAllViews()
+            fun chip(lbl: String, key: String?) {
+                val on = groupFilter == key
+                chips.addView(text(lbl, 13f, if (on) 0xFFFFFFFF.toInt() else col(R.color.text), on).apply {
+                    background = round(if (on) col(R.color.emerald) else col(R.color.tonal), 18f)
+                    setPadding(px(16), px(8), px(16), px(8))
+                    setOnClickListener { groupFilter = key; buildChips(); filter() }
+                }.press(18f), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = px(8) })
+            }
+            chip(getString(R.string.all), null)
+            for (t in groups.keys) chip(t, t)
+            for ((key, lbl) in smartGroups()) if (visibleAll.any { smartMatch(key, it) }) chip("✦ " + getString(lbl), key)
+        }
+        buildChips()
+
+        lv.setOnScrollListener(object : AbsListView.OnScrollListener {
+            override fun onScrollStateChanged(v: AbsListView?, state: Int) {}
+            override fun onScroll(v: AbsListView?, first: Int, visible: Int, total: Int) {
+                val headerOnScreen = first == 0 && top.height > px(40) && top.childCount > 0 && top.getChildAt(0).visibility == View.VISIBLE
+                index.visibility = if (headerOnScreen) View.INVISIBLE else View.VISIBLE
+            }
+        })
+
+        val (search, et) = searchBox(getString(R.string.search)) { contactQuery = it; filter() }
+        if (contactQuery.isNotEmpty()) et.setText(contactQuery)
         box.addView(search, LinearLayout.LayoutParams(-1, -2).apply { setMargins(px(16), px(2), px(16), px(6)) })
-        box.addView(lv, LinearLayout.LayoutParams(-1, 0, 1f))
-        lv.adapter = EntryAdapter(contacts)
+        box.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(chips) })
+        box.addView(body, LinearLayout.LayoutParams(-1, 0, 1f))
         content.addView(box)
+        filter()
+    }
+
+    private inner class PeopleAdapter(val getList: () -> List<Person>) : BaseAdapter() {
+        override fun getCount() = getList().size
+        override fun getItem(position: Int) = getList()[position]
+        override fun getItemId(position: Int) = getList()[position].id
+
+        inner class Holder(val head: TextView, val swipe: SwipeRow, val av: FrameLayout, val iv: ImageView, val letter: TextView,
+                           val name: TextView, val sub: TextView, val star: ImageView)
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val list = getList()
+            val p = list[position]
+            val outer: LinearLayout
+            val h: Holder
+            val reuse = convertView?.tag as? Holder
+            if (reuse == null) {
+                outer = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
+                val head = text("", 13f, col(R.color.emerald), true).apply { setPaddingRelative(px(22), px(14), px(22), px(4)) }
+                val row = LinearLayout(this@MainActivity).apply {
+                    gravity = Gravity.CENTER_VERTICAL; setPaddingRelative(px(18), px(9), px(34), px(9))
+                }
+                val (f, iv, letter) = avatar(46)
+                row.addView(f)
+                val texts = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; setPaddingRelative(px(14), 0, px(8), 0) }
+                val name = text("", 16f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
+                val sub = text("", 13f, col(R.color.sub)).apply { maxLines = 1; textDirection = View.TEXT_DIRECTION_LTR; textAlignment = View.TEXT_ALIGNMENT_VIEW_START }
+                texts.addView(name); texts.addView(sub)
+                row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
+                val star = icon(R.drawable.ic_star, col(R.color.gold), 18)
+                row.addView(star)
+                lateinit var swipe: SwipeRow
+                swipe = SwipeRow(this@MainActivity, row.press(0f), col(R.color.bg),
+                    R.drawable.ic_call, col(R.color.ok), { (swipe.tag as? Person)?.numbers?.firstOrNull()?.let { call(it) } },
+                    R.drawable.ic_chat, col(R.color.emerald), { (swipe.tag as? Person)?.numbers?.firstOrNull()?.let { sms(it) } })
+                outer.addView(head); outer.addView(swipe)
+                h = Holder(head, swipe, f, iv, letter, name, sub, star)
+                outer.tag = h
+            } else { outer = convertView as LinearLayout; h = reuse }
+
+            h.swipe.tag = p
+            h.swipe.content.setOnClickListener { openContact(p) }
+            h.swipe.content.setOnLongClickListener { contactActions(p); true }
+            val showHead = contactQuery.isBlank() && (position == 0 || list[position - 1].section != p.section)
+            h.head.visibility = if (showHead) View.VISIBLE else View.GONE
+            h.head.text = p.section
+            h.av.background = oval(avatarColor(p.name))
+            h.letter.text = initial(p.name)
+            h.name.text = p.name
+            h.sub.text = p.numbers.firstOrNull() ?: ""
+            h.sub.visibility = if (p.numbers.isEmpty()) View.GONE else View.VISIBLE
+            h.star.visibility = if (p.starred) View.VISIBLE else View.GONE
+            Thumbs.load(this@MainActivity, p.photo, h.iv, h.letter)
+            return outer
+        }
     }
 
     // ---------- Shared rows ----------

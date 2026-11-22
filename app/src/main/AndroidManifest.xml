@@ -27,6 +27,10 @@
         <intent><action android:name="com.sahl.tools.action.CALL_GUARD" /></intent>
         <package android:name="com.sahl.adhan" />
         <package android:name="com.sahl.contacts" />
+        <intent><action android:name="com.sahl.contacts.action.OPEN" /></intent>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="https" /></intent>
         <intent><action android:name="android.intent.action.SENDTO" /><data android:scheme="smsto" /></intent>
     </queries>
 
