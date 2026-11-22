@@ -39,6 +39,9 @@ class MainActivity : SahlActivity() {
     private var pickedDay: LocalDate? = null
     private var blockedView = false
     private var stopped: List<Guard.Stopped> = emptyList()
+    private var renderedMissed = -1
+    private var weekHasCalls = false
+    private var refreshWeek: (() -> Unit)? = null
 
     private val perms = arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE,
         Manifest.permission.READ_CALL_LOG, Manifest.permission.WRITE_CALL_LOG, Manifest.permission.READ_CONTACTS)
@@ -51,7 +54,7 @@ class MainActivity : SahlActivity() {
         root.addView(header(getString(R.string.app_name), false, listOf(
             R.drawable.ic_tune to { startActivity(Intent(this, SettingsActivity::class.java)) }
         )))
-        banner = card().apply { background = round(col(R.color.tonal), 22f); elevation = 0f }
+        banner = card().apply { background = round(col(R.color.tonal), 22f); elevation = 0f; visibility = View.GONE }
         root.addView(banner, LinearLayout.LayoutParams(-1, -2).apply { setMargins(px(16), px(4), px(16), px(6)) })
         // "Return to call" bar while a call is going on
         callBar = LinearLayout(this).apply {
@@ -161,9 +164,13 @@ class MainActivity : SahlActivity() {
         banner.addView(row)
     }
 
+    private fun missedCount(list: List<Recent>) =
+        list.count { it.type == CallLog.Calls.MISSED_TYPE && System.currentTimeMillis() - it.date < 86_400_000L }
+
     private fun renderTabs() {
         tabBar.removeAllViews()
-        val missed = recents.count { it.type == CallLog.Calls.MISSED_TYPE && System.currentTimeMillis() - it.date < 86_400_000L }
+        val missed = missedCount(recents)
+        renderedMissed = missed
         listOf(Triple(R.drawable.ic_dialpad, R.string.keypad, 0), Triple(R.drawable.ic_history, R.string.recents, missed),
             Triple(R.drawable.ic_people, R.string.contacts, 0)).forEachIndexed { i, (ic, label, badge) ->
             val on = i == tab
@@ -201,26 +208,69 @@ class MainActivity : SahlActivity() {
         }
     } catch (e: Exception) { emptyList() }
 
+    private fun sameRecents(a: List<Recent>, b: List<Recent>): Boolean {
+        if (a.size != b.size) return false
+        for (i in a.indices) {
+            val x = a[i]; val y = b[i]
+            if (x.number != y.number || x.name != y.name || x.type != y.type ||
+                x.date != y.date || x.duration != y.duration || x.count != y.count) return false
+        }
+        return true
+    }
+
     private fun load() {
         if (!granted()) { show(); return }
-        if (recents.isEmpty()) { val cached = readCache(); if (cached.isNotEmpty()) { recents = cached; renderTabs(); if (tab == 1) show() } }
+        if (recents.isEmpty()) {
+            val cached = readCache()
+            if (cached.isNotEmpty()) {
+                recents = cached
+                renderTabs()
+                if (tab == 1 && !blockedView) {
+                    if (refreshRecents != null) refreshRecents?.invoke() else show()
+                }
+            }
+        }
         Thread {
             // Recents first (that's what you look at), with every caller name looked up here — not while scrolling
             val r = try { Data.recents(this) } catch (e: Exception) { emptyList() }
             for (n in r.map { it.number }.distinct()) if (n.isNotBlank()) Lookup.caller(this, n)
-            runOnUiThread { recents = r; renderTabs(); if (tab == 1) show() }
+            runOnUiThread {
+                val changed = r != recents
+                val visualChange = !sameRecents(r, recents)
+                recents = r
+                if (missedCount(r) != renderedMissed) renderTabs()
+                if (tab == 1 && !blockedView) {
+                    if (refreshRecents != null) {
+                        if (changed) refreshRecents?.invoke()
+                    } else {
+                        show()
+                    }
+                }
+                if (visualChange) {
+                    WeeklySummary.invalidate()
+                    refreshWeek?.invoke()
+                }
+            }
             saveCache(r)
             val c = try { Data.contacts(this) } catch (e: Exception) { emptyList() }
             val g = Guard.log(this, 100)
             runOnUiThread {
+                val contactsChanged = c != contacts
+                val stoppedChanged = g != stopped
                 contacts = c; stopped = g
-                when { tab == 0 -> refreshPad(); tab == 2 || blockedView -> show() }   // never rebuild the keypad
+                when {
+                    tab == 0 -> refreshPad()
+                    tab == 2 && contactsChanged -> show()
+                    tab == 1 && blockedView && stoppedChanged -> show()
+                }   // never rebuild the keypad
                 MissedWidget.refresh(this)
             }
         }.start()
     }
 
     private fun show() {
+        refreshRecents = null
+        refreshWeek = null
         content.removeAllViews()
         when (tab) { 0 -> keypad(); 1 -> recentsView(); else -> contactsView() }
     }
@@ -331,8 +381,16 @@ class MainActivity : SahlActivity() {
         if (week != null) lv.addHeaderView(week, null, false)
         box.addView(lv, LinearLayout.LayoutParams(-1, 0, 1f))
         content.addView(box)
-        refreshRecents = { lv.adapter = recentsAdapter(filteredRecents()); week?.visibility = if (recentQuery.isBlank()) View.VISIBLE else View.GONE }
-        refreshRecents?.invoke()
+        val adapter = RecentsAdapter(filteredRecents())
+        lv.adapter = adapter
+        refreshRecents = {
+            val next = filteredRecents()
+            val visualChange = !sameRecents(next, adapter.list)
+            adapter.list = next
+            if (visualChange) adapter.notifyDataSetChanged()
+            week?.visibility = if (recentQuery.isBlank() && weekHasCalls) View.VISIBLE else View.GONE
+        }
+        week?.visibility = if (recentQuery.isBlank() && weekHasCalls) View.VISIBLE else View.GONE
     }
 
     private var refreshRecents: (() -> Unit)? = null
@@ -363,64 +421,72 @@ class MainActivity : SahlActivity() {
         }
     }
 
-    private fun recentsAdapter(list: List<Recent>): BaseAdapter {
-        return object : BaseAdapter() {            override fun getCount() = list.size
-            override fun getItem(p: Int) = list[p]
-            override fun getItemId(p: Int) = p.toLong()
-            override fun getView(p: Int, cv: View?, parent: ViewGroup): View {
-                val r = list[p]
-                val outer = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
-                val day = dayOf(r.date)
-                if (p == 0 || dayOf(list[p - 1].date) != day) outer.addView(text(dayLabel(r.date), 13f, col(R.color.emerald), true).apply {
-                    setPaddingRelative(px(22), px(14), px(22), px(4))
-                })
-                val name = Lookup.caller(this@MainActivity, r.number).name ?: r.name
-                val missed = r.type == CallLog.Calls.MISSED_TYPE || r.type == CallLog.Calls.REJECTED_TYPE
-                val (ic, color) = when (r.type) {
-                    CallLog.Calls.OUTGOING_TYPE -> R.drawable.ic_arrow_out to col(R.color.emerald)
-                    CallLog.Calls.BLOCKED_TYPE -> R.drawable.ic_block to col(R.color.sub)
-                    CallLog.Calls.MISSED_TYPE, CallLog.Calls.REJECTED_TYPE -> R.drawable.ic_call_missed to col(R.color.danger)
-                    else -> R.drawable.ic_arrow_in to col(R.color.ok)
-                }
-                val title = (name ?: r.number.ifBlank { getString(R.string.private_number) }) + if (r.count > 1) "  (${r.count})" else ""
-                val subText = (if (name != null) r.number + "  ·  " else (Countries.of(r.number, Sahl.countryCode(this@MainActivity), rtl)?.let { "$it  ·  " } ?: "")) + time(r.date)
-                val row = personRow(title, subText, if (missed) col(R.color.danger) else col(R.color.text), name ?: "#", null, ic, color)
-                if (r.number.isNotBlank()) row.addView(iconButton(R.drawable.ic_call, 0, col(R.color.emerald), 44, 22) { call(r.number) })
-                row.setOnClickListener { if (r.number.isNotBlank()) startActivity(Intent(this@MainActivity, CallDetailActivity::class.java).putExtra("number", r.number)) }
-                row.setOnLongClickListener { recentMenu(r, name); true }
-                outer.addView(swipe(row, r.number))
-                return outer
+    private inner class RecentsAdapter(var list: List<Recent>) : BaseAdapter() {
+        override fun getCount() = list.size
+        override fun getItem(p: Int) = list[p]
+        override fun getItemId(p: Int) = p.toLong()
+        override fun getView(p: Int, cv: View?, parent: ViewGroup): View {
+            val r = list[p]
+            val outer = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
+            val day = dayOf(r.date)
+            if (p == 0 || dayOf(list[p - 1].date) != day) outer.addView(text(dayLabel(r.date), 13f, col(R.color.emerald), true).apply {
+                setPaddingRelative(px(22), px(14), px(22), px(4))
+            })
+            val name = Lookup.caller(this@MainActivity, r.number).name ?: r.name
+            val missed = r.type == CallLog.Calls.MISSED_TYPE || r.type == CallLog.Calls.REJECTED_TYPE
+            val (ic, color) = when (r.type) {
+                CallLog.Calls.OUTGOING_TYPE -> R.drawable.ic_arrow_out to col(R.color.emerald)
+                CallLog.Calls.BLOCKED_TYPE -> R.drawable.ic_block to col(R.color.sub)
+                CallLog.Calls.MISSED_TYPE, CallLog.Calls.REJECTED_TYPE -> R.drawable.ic_call_missed to col(R.color.danger)
+                else -> R.drawable.ic_arrow_in to col(R.color.ok)
             }
+            val title = (name ?: r.number.ifBlank { getString(R.string.private_number) }) + if (r.count > 1) "  (${r.count})" else ""
+            val subText = (if (name != null) r.number + "  ·  " else (Countries.of(r.number, Sahl.countryCode(this@MainActivity), rtl)?.let { "$it  ·  " } ?: "")) + time(r.date)
+            val row = personRow(title, subText, if (missed) col(R.color.danger) else col(R.color.text), name ?: "#", null, ic, color)
+            if (r.number.isNotBlank()) row.addView(iconButton(R.drawable.ic_call, 0, col(R.color.emerald), 44, 22) { call(r.number) })
+            row.setOnClickListener { if (r.number.isNotBlank()) startActivity(Intent(this@MainActivity, CallDetailActivity::class.java).putExtra("number", r.number)) }
+            row.setOnLongClickListener { recentMenu(r, name); true }
+            outer.addView(swipe(row, r.number))
+            return outer
         }
     }
 
     /** "This week" card at the top of Recents. */
     private fun weekCard(): View {
-        val box = LinearLayout(this).apply { setPaddingRelative(px(16), px(4), px(16), px(4)) }
+        val box = LinearLayout(this).apply { setPaddingRelative(px(16), px(4), px(16), px(4)); visibility = View.GONE }
         val c = card().apply { background = round(col(R.color.tonal), 22f); elevation = 0f }
         box.addView(c, LinearLayout.LayoutParams(-1, -2))
-        Thread {
-            val w = WeeklySummary.compute(this)
-            runOnUiThread {
-                if (w.calls == 0) { box.visibility = View.GONE; return@runOnUiThread }
-                c.addView(label(getString(R.string.this_week)))
-                c.addView(text(getString(R.string.weekly_line, w.calls, (w.talk / 60).toInt()), 15f, col(R.color.text), true))
-                if (w.top.isNotEmpty()) c.addView(text(getString(R.string.most_talked) + " " +
-                    w.top.joinToString(" · ") { "${it.first.substringBefore(' ')} (${it.second})" }, 13f, col(R.color.sub)).apply { setPadding(0, px(4), 0, 0) })
-                if (w.missedNotReturned.isNotEmpty()) {
-                    c.addView(text(getString(R.string.weekly_not_returned, w.missedNotReturned.size), 13f, col(R.color.danger), true).apply { setPadding(0, px(8), 0, px(2)) })
-                    val row = LinearLayout(this)
-                    for (n in w.missedNotReturned.take(4)) {
-                        val nm = (Lookup.caller(this, n).name ?: n).substringBefore(' ')
-                        row.addView(text(nm, 13f, col(R.color.emerald), true).apply {
-                            background = round(col(R.color.card), 16f); setPadding(px(12), px(6), px(12), px(6))
-                            setOnClickListener { call(n) }
-                        }.press(16f), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = px(6) })
-                    }
-                    c.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(row) })
+        fun bind(w: Week) {
+            weekHasCalls = w.calls > 0
+            if (w.calls == 0) { box.visibility = View.GONE; return }
+            c.removeAllViews()
+            c.addView(label(getString(R.string.this_week)))
+            c.addView(text(getString(R.string.weekly_line, w.calls, (w.talk / 60).toInt()), 15f, col(R.color.text), true))
+            if (w.top.isNotEmpty()) c.addView(text(getString(R.string.most_talked) + " " +
+                w.top.joinToString(" · ") { "${it.first.substringBefore(' ')} (${it.second})" }, 13f, col(R.color.sub)).apply { setPadding(0, px(4), 0, 0) })
+            if (w.missedNotReturned.isNotEmpty()) {
+                c.addView(text(getString(R.string.weekly_not_returned, w.missedNotReturned.size), 13f, col(R.color.danger), true).apply { setPadding(0, px(8), 0, px(2)) })
+                val row = LinearLayout(this)
+                for (n in w.missedNotReturned.take(4)) {
+                    val nm = (Lookup.caller(this, n).name ?: n).substringBefore(' ')
+                    row.addView(text(nm, 13f, col(R.color.emerald), true).apply {
+                        background = round(col(R.color.card), 16f); setPadding(px(12), px(6), px(12), px(6))
+                        setOnClickListener { call(n) }
+                    }.press(16f), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = px(6) })
                 }
+                c.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(row) })
             }
-        }.start()
+            box.visibility = if (recentQuery.isBlank()) View.VISIBLE else View.GONE
+        }
+        fun fetch() {
+            Thread {
+                val w = WeeklySummary.compute(this)
+                runOnUiThread { bind(w) }
+            }.start()
+        }
+        refreshWeek = { fetch() }
+        val cached = WeeklySummary.peek()
+        if (cached != null) bind(cached) else fetch()
         return box
     }
 
