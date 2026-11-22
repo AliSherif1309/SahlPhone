@@ -128,6 +128,7 @@ class SettingsActivity : SahlActivity() {
 
         val un = card(R.string.union)
         un.addView(text(getString(R.string.union_desc), 14f, col(R.color.sub)))
+        un.addView(SahlUnionApps.strip(this))
     }
 
     private fun card(title: Int): LinearLayout {
