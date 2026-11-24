@@ -82,7 +82,23 @@ class UnionProvider : ContentProvider() {
                 "fetched" -> {
                     val out = MatrixCursor(arrayOf("name", "saved"))
                     val num = uri.pathSegments.getOrNull(1) ?: return out
-                    val who = Lookup.caller(c, num)
+                    var who = Lookup.caller(c, num)
+                    if (who.name == null) {
+                        val key = Norm.phoneKey(num)
+                        if (key.isNotEmpty()) c.contentResolver.query(CallLog.Calls.CONTENT_URI,
+                            arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME), null, null, CallLog.Calls.DATE + " DESC")?.use {
+                            var checked = 0
+                            while (it.moveToNext() && checked++ < 500) {
+                                val n = it.getString(0) ?: continue
+                                val cn = it.getString(1)?.takeIf { s -> s.isNotBlank() } ?: continue
+                                if (Norm.phoneKey(n) == key) {
+                                    Lookup.remember(c, num, cn)
+                                    who = Lookup.caller(c, num)
+                                    break
+                                }
+                            }
+                        }
+                    }
                     if (who.name != null) out.addRow(arrayOf<Any>(who.name, if (who.saved) 1 else 0))
                     out
                 }

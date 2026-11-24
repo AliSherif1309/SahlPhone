@@ -251,6 +251,7 @@ class MainActivity : SahlActivity() {
         Thread {
             // Recents first (that's what you look at), with every caller name looked up here — not while scrolling
             val r = try { Data.recents(this) } catch (e: Exception) { emptyList() }
+            for (x in r) if (x.number.isNotBlank() && !x.name.isNullOrBlank()) Lookup.remember(this, x.number, x.name)
             for (n in r.map { it.number }.distinct()) if (n.isNotBlank()) Lookup.caller(this, n)
             runOnUiThread {
                 val changed = r != recents
@@ -473,6 +474,12 @@ class MainActivity : SahlActivity() {
                 time(r.date) + (if (unanswered) "  ·  " + getString(R.string.didnt_answer) else "") +
                 (if (unsavedName) "  ·  " + getString(R.string.not_saved) else "")
             val row = personRow(title, subText, if (missed) col(R.color.danger) else col(R.color.text), name ?: "#", null, ic, color)
+            if (unsavedName && r.number.isNotBlank()) row.addView(iconButton(R.drawable.ic_person_add, 0, col(R.color.gold), 40, 20) {
+                go(Intent(Intent.ACTION_INSERT).setType(ContactsContract.Contacts.CONTENT_TYPE)
+                    .putExtra(ContactsContract.Intents.Insert.PHONE, r.number)
+                    .putExtra(ContactsContract.Intents.Insert.NAME, name)
+                    .apply { if (packageInstalled("com.sahl.contacts")) setPackage("com.sahl.contacts") })
+            })
             if (r.number.isNotBlank()) row.addView(iconButton(R.drawable.ic_call, 0, col(R.color.emerald), 44, 22) { call(r.number) })
             row.setOnClickListener { if (r.number.isNotBlank()) startActivity(Intent(this@MainActivity, CallDetailActivity::class.java).putExtra("number", r.number)) }
             row.setOnLongClickListener { recentMenu(r, name, saved); true }
