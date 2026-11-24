@@ -106,8 +106,8 @@ class MainActivity : SahlActivity() {
         renderTabs(); renderCallBar()
         CallManager.listeners.add(callListener)
         content.post { renderBanner(); load() }
-        // Opening the app clears the missed-call notice
-        if (tab == 1) Missed.clear(this)
+        // Opening the app on Recents clears the missed-call notice and badge
+        if (tab == 1) markRecentsSeen()
     }
 
     override fun onPause() { super.onPause(); CallManager.listeners.remove(callListener) }
@@ -173,8 +173,17 @@ class MainActivity : SahlActivity() {
         banner.addView(row)
     }
 
-    private fun missedCount(list: List<Recent>) =
-        list.count { it.type == CallLog.Calls.MISSED_TYPE && System.currentTimeMillis() - it.date < 86_400_000L }
+    private fun markRecentsSeen() {
+        val t = maxOf(System.currentTimeMillis(), recents.maxOfOrNull { it.date } ?: 0L)
+        Sahl.prefs(this).edit().putLong("recents_seen_at", t).apply()
+        Missed.clear(this)
+        if (renderedMissed != 0) renderTabs()
+    }
+
+    private fun missedCount(list: List<Recent>): Int {
+        val since = maxOf(System.currentTimeMillis() - 86_400_000L, Sahl.prefs(this).getLong("recents_seen_at", 0L))
+        return list.count { it.type == CallLog.Calls.MISSED_TYPE && it.date > since }
+    }
 
     private fun renderTabs() {
         tabBar.removeAllViews()
@@ -185,7 +194,7 @@ class MainActivity : SahlActivity() {
             val on = i == tab
             val b = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-                setOnClickListener { if (tab != i) { tab = i; renderTabs(); show(); if (i == 1) Missed.clear(this@MainActivity) } }
+                setOnClickListener { if (tab != i) { tab = i; if (i == 1) markRecentsSeen(); renderTabs(); show() } }
             }
             val pillBox = FrameLayout(this).apply { background = if (on) round(col(R.color.tonal), 16f) else null }
             pillBox.addView(ImageView(this).apply {
@@ -364,7 +373,7 @@ class MainActivity : SahlActivity() {
         }.press(18f), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = px(8) })
         chip(R.string.all, !missedOnly && !blockedView) { missedOnly = false; blockedView = false; show() }
         chip(R.string.missed, missedOnly) { missedOnly = true; blockedView = false; show() }
-        Missed.clear(this)
+        markRecentsSeen()
         if (Guard.installed(this)) chip(R.string.stopped, blockedView) { blockedView = true; missedOnly = false; show() }
         box.addView(chips)
         if (blockedView) { stoppedView(box); content.addView(box); return }
@@ -393,7 +402,7 @@ class MainActivity : SahlActivity() {
         box.addView(search, LinearLayout.LayoutParams(-1, -2).apply { setMargins(px(16), 0, px(16), px(6)) })
         val lv = ListView(this).apply { divider = null; selector = android.graphics.drawable.ColorDrawable(0); clipToPadding = false; setPadding(0, 0, 0, px(12)) }
         val week = if (!missedOnly && dateFilter == 0) weekCard() else null
-        if (week != null) lv.addHeaderView(week, null, false)
+        if (week != null) lv.addHeaderView(FrameLayout(this).apply { addView(week, FrameLayout.LayoutParams(-1, -2)) }, null, false)
         box.addView(lv, LinearLayout.LayoutParams(-1, 0, 1f))
         content.addView(box)
         val adapter = RecentsAdapter(filteredRecents())
