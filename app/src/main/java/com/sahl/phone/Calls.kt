@@ -54,10 +54,20 @@ object Lookup {
         return r
     }
 
+    fun remember(number: String, name: String?) {
+        if (number.isBlank() || name.isNullOrBlank()) return
+        val cur = cache[number]
+        if (cur?.name == null) cache[number] = Caller(name, cur?.photo)
+    }
+
     fun clear() = cache.clear()
 }
 
 fun Call.number(): String = details?.handle?.schemeSpecificPart ?: ""
+
+fun Call.displayName(): String? =
+    details?.callerDisplayName?.takeIf { it.isNotBlank() }
+        ?: details?.contactDisplayName?.takeIf { it.isNotBlank() }
 
 @Suppress("DEPRECATION")
 fun Call.st(): Int = if (Build.VERSION.SDK_INT >= 31) details.state else state
@@ -77,10 +87,14 @@ object CallManager {
 
     val callback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
+            Lookup.remember(call.number(), call.displayName())
             if (calls.none { it.st() == Call.STATE_RINGING }) FlipSilence.stop()
             changed()
         }
-        override fun onDetailsChanged(call: Call, details: Call.Details) { changed() }
+        override fun onDetailsChanged(call: Call, details: Call.Details) {
+            Lookup.remember(call.number(), call.displayName())
+            changed()
+        }
     }
 
     /** The call the screen should show (ignoring calls already disconnecting/disconnected). */
@@ -95,6 +109,7 @@ object CallManager {
 class SahlInCallService : InCallService() {
     override fun onCallAdded(call: Call) {
         if (call.st() == Call.STATE_DISCONNECTED || call.st() == Call.STATE_DISCONNECTING) return
+        Lookup.remember(call.number(), call.displayName())
         CallManager.service = this
         CallManager.calls.add(call)
         call.registerCallback(CallManager.callback)
@@ -189,7 +204,7 @@ object Notifs {
         })
         try { nm.deleteNotificationChannel("ongoing") } catch (e: Exception) { }
         val num = call.number()
-        val who = Lookup.caller(ctx, num).name ?: num.ifBlank { c.getString(R.string.private_number) }
+        val who = Lookup.caller(ctx, num).name ?: call.displayName() ?: num.ifBlank { c.getString(R.string.private_number) }
         val open = PendingIntent.getActivity(ctx, 1, Intent(ctx, InCallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val ringing = call.st() == Call.STATE_RINGING
