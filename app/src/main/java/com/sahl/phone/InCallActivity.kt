@@ -53,7 +53,7 @@ class InCallActivity : SahlActivity() {
     private val listener: () -> Unit = { render() }
     private val tick = object : Runnable { override fun run() { renderStatus(); main.postDelayed(this, 1000) } }
     private val finishTask = Runnable {
-        if (CallManager.calls.none { it.st() != Call.STATE_DISCONNECTED }) finishAndRemoveTask()
+        if (CallManager.primary() == null) finishAndRemoveTask()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -251,7 +251,7 @@ class InCallActivity : SahlActivity() {
     override fun onResume() {
         super.onResume()
         visible = true
-        if (CallManager.calls.none { it.st() != Call.STATE_DISCONNECTED }) { finishAndRemoveTask(); return }
+        if (CallManager.primary() == null) { finishAndRemoveTask(); return }
         main.post(tick)
         render()
     }
@@ -273,7 +273,7 @@ class InCallActivity : SahlActivity() {
     private fun render() {
         if (isFinishing || isDestroyed) return
         val call = CallManager.primary()
-        if (call == null || CallManager.calls.none { it.st() != Call.STATE_DISCONNECTED }) {
+        if (call == null) {
             statusTv.text = getString(R.string.ended)
             prox?.release()
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

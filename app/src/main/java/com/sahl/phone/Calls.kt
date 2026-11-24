@@ -83,15 +83,18 @@ object CallManager {
         override fun onDetailsChanged(call: Call, details: Call.Details) { changed() }
     }
 
-    /** The call the screen should show. */
-    fun primary(): Call? =
-        calls.firstOrNull { it.st() == Call.STATE_RINGING }
-            ?: calls.firstOrNull { it.st() in listOf(Call.STATE_ACTIVE, Call.STATE_DIALING, Call.STATE_CONNECTING, Call.STATE_SELECT_PHONE_ACCOUNT, Call.STATE_HOLDING) }
-            ?: calls.firstOrNull()
+    /** The call the screen should show (ignoring calls already disconnecting/disconnected). */
+    fun primary(): Call? {
+        val live = calls.filter { it.st() != Call.STATE_DISCONNECTED && it.st() != Call.STATE_DISCONNECTING }
+        return live.firstOrNull { it.st() == Call.STATE_RINGING }
+            ?: live.firstOrNull { it.st() in listOf(Call.STATE_ACTIVE, Call.STATE_DIALING, Call.STATE_CONNECTING, Call.STATE_SELECT_PHONE_ACCOUNT, Call.STATE_HOLDING) }
+            ?: live.firstOrNull()
+    }
 }
 
 class SahlInCallService : InCallService() {
     override fun onCallAdded(call: Call) {
+        if (call.st() == Call.STATE_DISCONNECTED || call.st() == Call.STATE_DISCONNECTING) return
         CallManager.service = this
         CallManager.calls.add(call)
         call.registerCallback(CallManager.callback)
@@ -129,11 +132,21 @@ class SahlInCallService : InCallService() {
         CallManager.changed()
     }
 
+    override fun onUnbind(intent: Intent?): Boolean {
+        cleanup()
+        return super.onUnbind(intent)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        cleanup()
+    }
+
+    private fun cleanup() {
         if (CallManager.service === this) {
             CallManager.service = null
             CallManager.calls.clear()
+            Notifs.cancel(this)
             CallManager.changed()
         }
     }
@@ -153,6 +166,10 @@ object Notifs {
 
     private fun pi(c: Context, code: Int, action: String) = PendingIntent.getBroadcast(c, code,
         Intent(c, CallActionReceiver::class.java).setAction(action), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+    fun cancel(ctx: Context) {
+        ctx.getSystemService(NotificationManager::class.java)?.cancel(ID)
+    }
 
     fun update(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
@@ -203,11 +220,15 @@ object Notifs {
 
 class CallActionReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        val call = CallManager.primary() ?: return
+        val call = CallManager.primary()
+        if (call == null) { Notifs.cancel(ctx); return }
         when (intent.action) {
             "answer" -> { call.answer(VideoProfile.STATE_AUDIO_ONLY); SahlInCallService.openScreen(ctx) }
-            "decline" -> call.reject(false, null)
-            "end" -> call.disconnect()
+            "decline" -> {
+                if (call.st() == Call.STATE_RINGING) call.reject(false, null) else call.disconnect()
+                Notifs.cancel(ctx)
+            }
+            "end" -> { call.disconnect(); Notifs.cancel(ctx) }
         }
     }
 }
