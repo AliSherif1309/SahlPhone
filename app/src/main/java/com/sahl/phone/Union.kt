@@ -99,7 +99,7 @@ class UnionProvider : ContentProvider() {
                             }
                         }
                     }
-                    if (who.name != null) out.addRow(arrayOf<Any>(who.name, if (who.saved) 1 else 0))
+                    who.name?.let { name -> out.addRow(arrayOf<Any>(name, if (who.saved) 1 else 0)) }
                     out
                 }
                 else -> null
