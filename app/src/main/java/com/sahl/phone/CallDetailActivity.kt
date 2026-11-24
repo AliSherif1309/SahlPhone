@@ -40,20 +40,28 @@ class CallDetailActivity : SahlActivity() {
 
     private fun load() {
         Thread {
-            val who = Lookup.caller(this, number)
+            var who = Lookup.caller(this, number)
             val facts = Facts.of(this, number)
             val key = Norm.phoneKey(number)
             val rows = ArrayList<Row>()
+            var cachedName: String? = null
             try {
                 contentResolver.query(CallLog.Calls.CONTENT_URI,
-                    arrayOf(CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION),
+                    arrayOf(CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION, CallLog.Calls.CACHED_NAME),
                     null, null, CallLog.Calls.DATE + " DESC")?.use {
                     while (it.moveToNext() && rows.size < 200) {
                         val n = it.getString(1) ?: continue
-                        if (Norm.phoneKey(n) == key) rows.add(Row(it.getLong(0), it.getInt(2), it.getLong(3), it.getLong(4)))
+                        if (Norm.phoneKey(n) == key) {
+                            rows.add(Row(it.getLong(0), it.getInt(2), it.getLong(3), it.getLong(4)))
+                            if (cachedName == null) cachedName = it.getString(5)?.takeIf { s -> s.isNotBlank() }
+                        }
                     }
                 }
             } catch (e: Exception) { }
+            if (who.name == null && cachedName != null) {
+                Lookup.remember(this, number, cachedName)
+                who = Lookup.caller(this, number)
+            }
             runOnUiThread { build(who, facts, rows) }
         }.start()
     }
