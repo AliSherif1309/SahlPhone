@@ -307,15 +307,15 @@ class MainActivity : SahlActivity() {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val matches = ListView(this).apply { divider = null; selector = android.graphics.drawable.ColorDrawable(0) }
         box.addView(matches, LinearLayout.LayoutParams(-1, 0, 1f))
-        val numTv = text(typed, 34f, col(R.color.text)).apply {
-            gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR; maxLines = 1; setPadding(px(16), px(4), px(16), 0)
+        val numTv = text(typed, 32f, col(R.color.text)).apply {
+            gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR; maxLines = 1; setPadding(px(16), px(2), px(16), 0)
             setOnLongClickListener {
                 val clip = getSystemService(ClipboardManager::class.java).primaryClip?.getItemAt(0)?.text?.toString()
                 if (!clip.isNullOrBlank()) { typed = clip.filter { it.isDigit() || it == '+' || it == '*' || it == '#' }; refreshPad() }
                 true
             }
         }
-        val hint = text("", 13f, col(R.color.sub)).apply { gravity = Gravity.CENTER; setPadding(0, 0, 0, px(4)) }
+        val hint = text("", 13f, col(R.color.sub)).apply { gravity = Gravity.CENTER; setPadding(0, 0, 0, px(2)) }
         padRefresh = {
             numTv.text = typed
             val q = Norm.digits(typed)
@@ -337,20 +337,20 @@ class MainActivity : SahlActivity() {
                     setOnClickListener { typed += ch; performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP); refreshPad() }
                     if (ch == '0') setOnLongClickListener { typed += "+"; refreshPad(); true }
                 }.press(circle = true)
-                k.addView(text(ch.toString(), 28f, col(R.color.text)).apply { gravity = Gravity.CENTER })
+                k.addView(text(ch.toString(), 26f, col(R.color.text)).apply { gravity = Gravity.CENTER })
                 k.addView(text(letters[ch] ?: " ", 9f, col(R.color.sub)).apply { gravity = Gravity.CENTER; letterSpacing = 0.15f })
-                r.addView(k, LinearLayout.LayoutParams(px(74), px(74)).apply { setMargins(px(12), px(6), px(12), px(6)) })
+                r.addView(k, LinearLayout.LayoutParams(px(64), px(64)).apply { setMargins(px(12), px(4), px(12), px(4)) })
             }
             pad.addView(r)
         }
-        val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(px(24), px(8), px(24), px(14)); layoutDirection = View.LAYOUT_DIRECTION_LTR }
+        val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(px(24), px(6), px(24), px(10)); layoutDirection = View.LAYOUT_DIRECTION_LTR }
         actions.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        actions.addView(iconButton(R.drawable.ic_call, col(R.color.ok), 0xFFFFFFFF.toInt(), 72, 30) {
+        actions.addView(iconButton(R.drawable.ic_call, col(R.color.ok), 0xFFFFFFFF.toInt(), 64, 28) {
             if (typed.isEmpty()) { typed = recents.firstOrNull { r -> r.type == CallLog.Calls.OUTGOING_TYPE }?.number ?: ""; refreshPad() }
             else { val n = typed; typed = ""; refreshPad(); call(n) }
         }.apply { elevation = 4f * dp })
         val back = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        back.addView(iconButton(R.drawable.ic_backspace, 0, col(R.color.sub), 56, 24) { typed = typed.dropLast(1); refreshPad() }.apply {
+        back.addView(iconButton(R.drawable.ic_backspace, 0, col(R.color.sub), 52, 22) { typed = typed.dropLast(1); refreshPad() }.apply {
             setOnLongClickListener { typed = ""; refreshPad(); true }
         })
         actions.addView(back, LinearLayout.LayoutParams(0, -2, 1f))
