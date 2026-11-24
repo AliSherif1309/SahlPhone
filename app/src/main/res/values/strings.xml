@@ -144,6 +144,7 @@
     <string name="followups">Call follow-ups</string>
     <string name="no_answer">%1$s didn’t answer</string>
     <string name="didnt_answer">Didn’t answer</string>
+    <string name="not_saved">Not saved</string>
     <string name="was_busy">%1$s was busy</string>
     <string name="try_again_q">Remind you to try again?</string>
     <string name="call_again">Call again</string>

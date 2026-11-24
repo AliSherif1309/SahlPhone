@@ -27,37 +27,57 @@ import android.telecom.VideoProfile
 import java.util.concurrent.ConcurrentHashMap
 
 /** Who is calling: name from Sahl Contacts (Sahl Union) or Android contacts. */
-data class Caller(val name: String?, val photo: String?)
+data class Caller(val name: String?, val photo: String?, val saved: Boolean = true)
 
 object Lookup {
     private val cache = ConcurrentHashMap<String, Caller>()
     private var clearedAt = System.currentTimeMillis()
 
     fun caller(c: Context, number: String): Caller {
-        if (number.isBlank()) return Caller(null, null)
+        if (number.isBlank()) return Caller(null, null, false)
         if (System.currentTimeMillis() - clearedAt > 10 * 60_000L) { cache.clear(); clearedAt = System.currentTimeMillis() }
         cache[number]?.let { return it }
-        var r = Caller(null, null)
+        var r = Caller(null, null, false)
         // 1) Sahl Union — Sahl Contacts answers for the family
         try {
             c.contentResolver.query(Uri.parse("content://com.sahl.contacts.union/lookup/" + Uri.encode(number)),
-                null, null, null, null)?.use { if (it.moveToFirst()) r = Caller(it.getString(0), it.getString(2)) }
+                null, null, null, null)?.use { if (it.moveToFirst()) r = Caller(it.getString(0), it.getString(2), true) }
         } catch (e: Exception) { }
         // 2) Fallback: Android contacts directly
         if (r.name == null) try {
             c.contentResolver.query(Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number)),
                 arrayOf(PhoneLookup.DISPLAY_NAME, PhoneLookup.PHOTO_THUMBNAIL_URI), null, null, null)?.use {
-                if (it.moveToFirst()) r = Caller(it.getString(0), it.getString(1))
+                if (it.moveToFirst()) r = Caller(it.getString(0), it.getString(1), true)
             }
         } catch (e: Exception) { }
+        // 3) Fallback: previously fetched carrier/network display name (not saved in contacts)
+        if (r.name == null) {
+            val fetched = fetchedName(c, number)
+            if (fetched != null) r = Caller(fetched, null, false)
+        }
         cache[number] = r
         return r
     }
 
-    fun remember(number: String, name: String?) {
+    private fun fetchedName(c: Context, number: String): String? = try {
+        val k = Norm.phoneKey(number)
+        if (k.isEmpty()) null
+        else org.json.JSONObject(Sahl.prefs(c).getString("fetched_names", "{}")).optString(k).ifEmpty { null }
+    } catch (e: Exception) { null }
+
+    fun remember(c: Context, number: String, name: String?) {
         if (number.isBlank() || name.isNullOrBlank()) return
         val cur = cache[number]
-        if (cur?.name == null) cache[number] = Caller(name, cur?.photo)
+        if (cur?.name == null) cache[number] = Caller(name, cur?.photo, false)
+        val k = Norm.phoneKey(number)
+        if (k.isNotEmpty()) try {
+            val prefs = Sahl.prefs(c)
+            val obj = org.json.JSONObject(prefs.getString("fetched_names", "{}"))
+            if (obj.optString(k) != name) {
+                obj.put(k, name)
+                prefs.edit().putString("fetched_names", obj.toString()).apply()
+            }
+        } catch (e: Exception) { }
     }
 
     fun clear() = cache.clear()
@@ -87,12 +107,12 @@ object CallManager {
 
     val callback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
-            Lookup.remember(call.number(), call.displayName())
+            service?.let { Lookup.remember(it, call.number(), call.displayName()) }
             if (calls.none { it.st() == Call.STATE_RINGING }) FlipSilence.stop()
             changed()
         }
         override fun onDetailsChanged(call: Call, details: Call.Details) {
-            Lookup.remember(call.number(), call.displayName())
+            service?.let { Lookup.remember(it, call.number(), call.displayName()) }
             changed()
         }
     }
@@ -109,7 +129,7 @@ object CallManager {
 class SahlInCallService : InCallService() {
     override fun onCallAdded(call: Call) {
         if (call.st() == Call.STATE_DISCONNECTED || call.st() == Call.STATE_DISCONNECTING) return
-        Lookup.remember(call.number(), call.displayName())
+        Lookup.remember(this, call.number(), call.displayName())
         CallManager.service = this
         CallManager.calls.add(call)
         call.registerCallback(CallManager.callback)

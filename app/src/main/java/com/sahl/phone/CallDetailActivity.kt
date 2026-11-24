@@ -30,7 +30,11 @@ class CallDetailActivity : SahlActivity() {
         setContentView(root)
     }
 
-    override fun onResume() { super.onResume(); load() }
+    override fun onResume() {
+        super.onResume()
+        if (last?.first?.saved == false) Lookup.clear()
+        load()
+    }
 
     private data class Row(val id: Long, val type: Int, val date: Long, val duration: Long)
 
@@ -74,13 +78,15 @@ class CallDetailActivity : SahlActivity() {
         val rows = allRows.filter { inPeriod(it.date) }
         body.removeAllViews()
         val name = who.name
+        val saved = name != null && who.saved
         val (av, iv, letter) = avatar(104)
         av.background = oval(avatarColor(name ?: number))
         letter.text = if (name != null) Norm.section(name).let { if (it == "#") "" else it } else ""
         Thumbs.load(this, who.photo, iv, letter)
         body.addView(av, LinearLayout.LayoutParams(px(104), px(104)).apply { gravity = Gravity.CENTER_HORIZONTAL })
         body.addView(text(name ?: number, 24f, col(R.color.text), true).apply { gravity = Gravity.CENTER; setPadding(0, px(14), 0, 0) })
-        val sub = listOfNotNull(if (name != null) number else null, Countries.of(number, Sahl.countryCode(this), rtl)).joinToString("  ·  ")
+        val sub = listOfNotNull(if (name != null) number else null, Countries.of(number, Sahl.countryCode(this), rtl),
+            if (name != null && !saved) getString(R.string.not_saved) else null).joinToString("  ·  ")
         if (sub.isNotEmpty()) body.addView(text(sub, 14f, col(R.color.sub)).apply { gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR })
         val totalTalk = rows.sumOf { it.duration }
         body.addView(text(getString(R.string.detail_facts, rows.size, dur(totalTalk)), 13f, col(R.color.emerald)).apply {
@@ -98,7 +104,7 @@ class CallDetailActivity : SahlActivity() {
         action(R.drawable.ic_call, R.string.call) { Dialer.call(this, number) }
         action(R.drawable.ic_chat, R.string.message) { go(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(number)))) }
         action(R.drawable.ic_bell, R.string.remind_me) { remind() }
-        if (name == null) action(R.drawable.ic_person_add, R.string.add_contact) { addContact() }
+        if (!saved) action(R.drawable.ic_person_add, R.string.add_contact) { addContact(name) }
         else action(R.drawable.ic_copy, R.string.copy) {
             getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("number", number)); toast(R.string.copied)
         }
@@ -210,9 +216,10 @@ class CallDetailActivity : SahlActivity() {
             .setNegativeButton(R.string.cancel, null).show()
     }
 
-    private fun addContact() {
+    private fun addContact(name: String? = null) {
         val i = Intent(Intent.ACTION_INSERT).setType(ContactsContract.Contacts.CONTENT_TYPE)
             .putExtra(ContactsContract.Intents.Insert.PHONE, number)
+        if (!name.isNullOrBlank()) i.putExtra(ContactsContract.Intents.Insert.NAME, name)
         try { packageManager.getPackageInfo("com.sahl.contacts", 0); i.setPackage("com.sahl.contacts") } catch (e: Exception) { }
         go(i)
     }
