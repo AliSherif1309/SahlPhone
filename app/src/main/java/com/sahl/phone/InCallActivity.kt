@@ -284,12 +284,14 @@ class InCallActivity : SahlActivity() {
         main.removeCallbacks(finishTask)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val num = call.number()
-        if (num != shownNumber) {
+        val display = Lookup.caller(this, num).name ?: call.displayName()
+        if (num != shownNumber || (display != null && nameTv.text.toString() != display)) {
             shownNumber = num
             val who = Lookup.caller(this, num)
-            nameTv.text = who.name ?: num.ifBlank { getString(R.string.private_number) }
+            val showName = who.name ?: call.displayName()
+            nameTv.text = showName ?: num.ifBlank { getString(R.string.private_number) }
             val country = if (num.isNotBlank()) Countries.of(num, Sahl.countryCode(this), rtl) else null
-            numberTv.text = listOfNotNull(if (who.name != null) num else null, country).joinToString("  ·  ")
+            numberTv.text = listOfNotNull(if (showName != null) num else null, country).joinToString("  ·  ")
             avatarBox.background = oval(avatarColor(nameTv.text.toString()))
             avatarLetter.text = Norm.section(nameTv.text.toString()).let { if (it == "#") "" else it }
             Thumbs.load(this, who.photo, avatarImg, avatarLetter)

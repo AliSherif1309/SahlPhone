@@ -118,7 +118,7 @@ class MainActivity : SahlActivity() {
         callBar.removeAllViews(); callBar.visibility = View.VISIBLE
         callBar.addView(icon(R.drawable.ic_call, 0xFFFFFFFF.toInt(), 22))
         val n = call.number()
-        callBar.addView(text(getString(R.string.return_to_call, Lookup.caller(this, n).name ?: n.ifBlank { getString(R.string.private_number) }),
+        callBar.addView(text(getString(R.string.return_to_call, Lookup.caller(this, n).name ?: call.displayName() ?: n.ifBlank { getString(R.string.private_number) }),
             15f, 0xFFFFFFFF.toInt(), true).apply { setPaddingRelative(px(12), 0, 0, 0); maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
         callBar.addView(icon(R.drawable.ic_back, 0xFFFFFFFF.toInt(), 20).apply { rotation = if (rtl) 0f else 180f })
     }
