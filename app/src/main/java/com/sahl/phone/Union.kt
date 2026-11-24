@@ -78,6 +78,14 @@ class UnionProvider : ContentProvider() {
                     }
                     out
                 }
+                // Fetched carrier/network display name for an unsaved number (name, saved)
+                "fetched" -> {
+                    val out = MatrixCursor(arrayOf("name", "saved"))
+                    val num = uri.pathSegments.getOrNull(1) ?: return out
+                    val who = Lookup.caller(c, num)
+                    if (who.name != null) out.addRow(arrayOf<Any>(who.name, if (who.saved) 1 else 0))
+                    out
+                }
                 else -> null
             }
         } catch (e: Exception) { null }
