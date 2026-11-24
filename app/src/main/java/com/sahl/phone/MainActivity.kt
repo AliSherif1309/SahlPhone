@@ -251,8 +251,10 @@ class MainActivity : SahlActivity() {
         Thread {
             // Recents first (that's what you look at), with every caller name looked up here — not while scrolling
             val r = try { Data.recents(this) } catch (e: Exception) { emptyList() }
-            for (x in r) if (x.number.isNotBlank() && !x.name.isNullOrBlank()) Lookup.remember(this, x.number, x.name)
             for (n in r.map { it.number }.distinct()) if (n.isNotBlank()) Lookup.caller(this, n)
+            for (x in r) if (x.number.isNotBlank() && !x.name.isNullOrBlank() && Lookup.caller(this, x.number).name == null) {
+                Lookup.remember(this, x.number, x.name)
+            }
             runOnUiThread {
                 val changed = r != recents
                 val visualChange = !sameRecents(r, recents)
@@ -903,7 +905,7 @@ class MainActivity : SahlActivity() {
         r.addView(f)
         val t = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingRelative(px(14), 0, px(8), 0) }
         t.addView(text(title, 16f, color).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
-        t.addView(text(sub, 13f, col(R.color.sub)).apply { maxLines = 1; textDirection = View.TEXT_DIRECTION_LTR; textAlignment = View.TEXT_ALIGNMENT_VIEW_START })
+        t.addView(text(sub, 13f, col(R.color.sub)).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; textDirection = View.TEXT_DIRECTION_LTR; textAlignment = View.TEXT_ALIGNMENT_VIEW_START })
         r.addView(t, LinearLayout.LayoutParams(0, -2, 1f))
         if (trailIcon != 0) r.addView(icon(trailIcon, trailColor, 18))
         return r

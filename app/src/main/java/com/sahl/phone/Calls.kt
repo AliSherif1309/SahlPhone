@@ -68,7 +68,7 @@ object Lookup {
     fun remember(c: Context, number: String, name: String?) {
         if (number.isBlank() || name.isNullOrBlank()) return
         val cur = cache[number]
-        if (cur?.name == null) cache[number] = Caller(name, cur?.photo, false)
+        if (cur != null && cur.name == null) cache[number] = Caller(name, cur.photo, false)
         val k = Norm.phoneKey(number)
         if (k.isNotEmpty()) try {
             val prefs = Sahl.prefs(c)
