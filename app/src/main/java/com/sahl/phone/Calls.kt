@@ -149,7 +149,7 @@ class SahlInCallService : InCallService() {
 object Notifs {
     private const val ID = 77
     private const val CH_IN = "calls_ring"   // new channel id so the high-priority settings apply
-    private const val CH_ON = "ongoing"
+    private const val CH_ON = "calls_ongoing"
 
     private fun pi(c: Context, code: Int, action: String) = PendingIntent.getBroadcast(c, code,
         Intent(c, CallActionReceiver::class.java).setAction(action), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -165,17 +165,26 @@ object Notifs {
             setBypassDnd(false)
         })
         try { nm.deleteNotificationChannel("incoming") } catch (e: Exception) { }
-        nm.createNotificationChannel(NotificationChannel(CH_ON, c.getString(R.string.ongoing), NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(CH_ON, c.getString(R.string.ongoing), NotificationManager.IMPORTANCE_DEFAULT).apply {
+            setSound(null, null as AudioAttributes?)
+            enableVibration(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        })
+        try { nm.deleteNotificationChannel("ongoing") } catch (e: Exception) { }
         val num = call.number()
         val who = Lookup.caller(ctx, num).name ?: num.ifBlank { c.getString(R.string.private_number) }
         val open = PendingIntent.getActivity(ctx, 1, Intent(ctx, InCallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val ringing = call.st() == Call.STATE_RINGING
+        val connectedAt = call.details.connectTimeMillis
         val b = Notification.Builder(ctx, if (ringing) CH_IN else CH_ON)
             .setSmallIcon(R.drawable.ic_call).setOngoing(true).setContentIntent(open)
             .setCategory(Notification.CATEGORY_CALL).setContentTitle(who)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentText(c.getString(if (ringing) R.string.incoming else R.string.ongoing))
+        if (!ringing && call.st() == Call.STATE_ACTIVE && connectedAt > 0) {
+            b.setWhen(connectedAt).setShowWhen(true).setUsesChronometer(true)
+        }
         val decline = pi(ctx, 2, "decline"); val answer = pi(ctx, 3, "answer"); val hang = pi(ctx, 4, "end")
         if (ringing) b.setFullScreenIntent(open, true)
         if (Build.VERSION.SDK_INT >= 31) {
