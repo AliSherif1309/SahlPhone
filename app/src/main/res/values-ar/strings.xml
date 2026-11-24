@@ -143,6 +143,7 @@
     <string name="search_history">ابحث بالاسم أو الرقم أو الملاحظة</string>
     <string name="followups">متابعة المكالمات</string>
     <string name="no_answer">%1$s لم يرد</string>
+    <string name="didnt_answer">لم يرد</string>
     <string name="was_busy">%1$s مشغول</string>
     <string name="try_again_q">هل أذكّرك بالمحاولة مرة أخرى؟</string>
     <string name="call_again">اتصل مرة أخرى</string>

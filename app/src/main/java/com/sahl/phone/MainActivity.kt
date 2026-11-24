@@ -458,14 +458,16 @@ class MainActivity : SahlActivity() {
             })
             val name = Lookup.caller(this@MainActivity, r.number).name ?: r.name
             val missed = r.type == CallLog.Calls.MISSED_TYPE || r.type == CallLog.Calls.REJECTED_TYPE
+            val unanswered = r.type == CallLog.Calls.OUTGOING_TYPE && r.duration == 0L
             val (ic, color) = when (r.type) {
-                CallLog.Calls.OUTGOING_TYPE -> R.drawable.ic_arrow_out to col(R.color.emerald)
+                CallLog.Calls.OUTGOING_TYPE -> R.drawable.ic_arrow_out to col(if (unanswered) R.color.gold else R.color.emerald)
                 CallLog.Calls.BLOCKED_TYPE -> R.drawable.ic_block to col(R.color.sub)
                 CallLog.Calls.MISSED_TYPE, CallLog.Calls.REJECTED_TYPE -> R.drawable.ic_call_missed to col(R.color.danger)
                 else -> R.drawable.ic_arrow_in to col(R.color.ok)
             }
             val title = (name ?: r.number.ifBlank { getString(R.string.private_number) }) + if (r.count > 1) "  (${r.count})" else ""
-            val subText = (if (name != null) r.number + "  ·  " else (Countries.of(r.number, Sahl.countryCode(this@MainActivity), rtl)?.let { "$it  ·  " } ?: "")) + time(r.date)
+            val subText = (if (name != null) r.number + "  ·  " else (Countries.of(r.number, Sahl.countryCode(this@MainActivity), rtl)?.let { "$it  ·  " } ?: "")) +
+                time(r.date) + (if (unanswered) "  ·  " + getString(R.string.didnt_answer) else "")
             val row = personRow(title, subText, if (missed) col(R.color.danger) else col(R.color.text), name ?: "#", null, ic, color)
             if (r.number.isNotBlank()) row.addView(iconButton(R.drawable.ic_call, 0, col(R.color.emerald), 44, 22) { call(r.number) })
             row.setOnClickListener { if (r.number.isNotBlank()) startActivity(Intent(this@MainActivity, CallDetailActivity::class.java).putExtra("number", r.number)) }

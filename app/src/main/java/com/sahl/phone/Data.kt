@@ -129,13 +129,14 @@ object Data {
                 CallLog.Calls.DATE, CallLog.Calls.DURATION),
             null, null, CallLog.Calls.DATE + " DESC")?.use {
             while (it.moveToNext() && out.size < limit) {
-                val id = it.getLong(0); val num = it.getString(1) ?: ""; val type = it.getInt(3)
+                val id = it.getLong(0); val num = it.getString(1) ?: ""; val type = it.getInt(3); val dur = it.getLong(5)
                 val last = out.lastOrNull()
                 // Group back-to-back calls from the same number of the same kind
-                if (last != null && Norm.phoneKey(last.number) == Norm.phoneKey(num) && last.type == type) {
+                if (last != null && Norm.phoneKey(last.number) == Norm.phoneKey(num) && last.type == type &&
+                    (type != CallLog.Calls.OUTGOING_TYPE || (last.duration > 0) == (dur > 0))) {
                     out[out.size - 1] = last.copy(ids = last.ids + id, count = last.count + 1)
                 } else out.add(Recent(listOf(id), num, it.getString(2)?.takeIf { s -> s.isNotBlank() }, type,
-                    it.getLong(4), it.getLong(5), 1))
+                    it.getLong(4), dur, 1))
             }
         }
         return out

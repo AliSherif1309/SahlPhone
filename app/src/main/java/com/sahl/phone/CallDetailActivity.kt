@@ -139,7 +139,8 @@ class CallDetailActivity : SahlActivity() {
                 card.addView(text(dayLabel(day), 12f, col(R.color.sub), true).apply { setPaddingRelative(0, px(10), 0, px(2)) })
             }
             val (ic, color, label) = when (r.type) {
-                CallLog.Calls.OUTGOING_TYPE -> Triple(R.drawable.ic_arrow_out, col(R.color.emerald), R.string.outgoing)
+                CallLog.Calls.OUTGOING_TYPE -> if (r.duration == 0L) Triple(R.drawable.ic_arrow_out, col(R.color.gold), R.string.didnt_answer)
+                    else Triple(R.drawable.ic_arrow_out, col(R.color.emerald), R.string.outgoing)
                 CallLog.Calls.MISSED_TYPE -> Triple(R.drawable.ic_call_missed, col(R.color.danger), R.string.missed)
                 CallLog.Calls.REJECTED_TYPE -> Triple(R.drawable.ic_call_missed, col(R.color.danger), R.string.rejected)
                 CallLog.Calls.BLOCKED_TYPE -> Triple(R.drawable.ic_block, col(R.color.sub), R.string.blocked)
