@@ -456,7 +456,10 @@ class MainActivity : SahlActivity() {
             if (p == 0 || dayOf(list[p - 1].date) != day) outer.addView(text(dayLabel(r.date), 13f, col(R.color.emerald), true).apply {
                 setPaddingRelative(px(22), px(14), px(22), px(4))
             })
-            val name = Lookup.caller(this@MainActivity, r.number).name ?: r.name
+            val who = Lookup.caller(this@MainActivity, r.number)
+            val name = who.name ?: r.name
+            val saved = who.name != null && who.saved
+            val unsavedName = name != null && !saved
             val missed = r.type == CallLog.Calls.MISSED_TYPE || r.type == CallLog.Calls.REJECTED_TYPE
             val unanswered = r.type == CallLog.Calls.OUTGOING_TYPE && r.duration == 0L
             val (ic, color) = when (r.type) {
@@ -467,11 +470,12 @@ class MainActivity : SahlActivity() {
             }
             val title = (name ?: r.number.ifBlank { getString(R.string.private_number) }) + if (r.count > 1) "  (${r.count})" else ""
             val subText = (if (name != null) r.number + "  ·  " else (Countries.of(r.number, Sahl.countryCode(this@MainActivity), rtl)?.let { "$it  ·  " } ?: "")) +
-                time(r.date) + (if (unanswered) "  ·  " + getString(R.string.didnt_answer) else "")
+                time(r.date) + (if (unanswered) "  ·  " + getString(R.string.didnt_answer) else "") +
+                (if (unsavedName) "  ·  " + getString(R.string.not_saved) else "")
             val row = personRow(title, subText, if (missed) col(R.color.danger) else col(R.color.text), name ?: "#", null, ic, color)
             if (r.number.isNotBlank()) row.addView(iconButton(R.drawable.ic_call, 0, col(R.color.emerald), 44, 22) { call(r.number) })
             row.setOnClickListener { if (r.number.isNotBlank()) startActivity(Intent(this@MainActivity, CallDetailActivity::class.java).putExtra("number", r.number)) }
-            row.setOnLongClickListener { recentMenu(r, name); true }
+            row.setOnLongClickListener { recentMenu(r, name, saved); true }
             outer.addView(swipe(row, r.number))
             return outer
         }
@@ -551,7 +555,7 @@ class MainActivity : SahlActivity() {
     }
     private fun time(t: Long) = Instant.ofEpochMilli(t).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm", resources.configuration.locales[0]))
 
-    private fun recentMenu(r: Recent, name: String?) {
+    private fun recentMenu(r: Recent, name: String?, saved: Boolean) {
         if (r.number.isBlank()) return
         val items = mutableListOf(
             Triple(R.drawable.ic_history, getString(R.string.call_details)) {
@@ -564,9 +568,10 @@ class MainActivity : SahlActivity() {
                 getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("number", r.number)); toast(R.string.copied)
             }
         )
-        if (name == null) items.add(Triple(R.drawable.ic_person_add, getString(R.string.add_contact)) {
+        if (!saved) items.add(Triple(R.drawable.ic_person_add, getString(R.string.add_contact)) {
             go(Intent(Intent.ACTION_INSERT).setType(ContactsContract.Contacts.CONTENT_TYPE)
                 .putExtra(ContactsContract.Intents.Insert.PHONE, r.number).apply {
+                    if (!name.isNullOrBlank()) putExtra(ContactsContract.Intents.Insert.NAME, name)
                     if (packageInstalled("com.sahl.contacts")) setPackage("com.sahl.contacts")
                 })
         })
