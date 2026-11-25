@@ -21,7 +21,9 @@
 
     <queries>
         <package android:name="com.sahl.home" />
+        <package android:name="com.aly.sahlpdf" />
         <package android:name="com.sahl.pdf" />
+        <package android:name="com.sahl.home" />
         <package android:name="com.aly.trueqibla" />
         <package android:name="com.aly.sahlsync" />
         <package android:name="com.sahl.files" />
