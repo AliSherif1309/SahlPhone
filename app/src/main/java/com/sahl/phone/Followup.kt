@@ -33,7 +33,7 @@ object Followup {
         val who = Lookup.caller(ctx, number).name ?: number
         val id = 30_000 + (number.hashCode() and 0xffff)
         val title = c.getString(if (cause == DisconnectCause.BUSY) R.string.was_busy else R.string.no_answer, who)
-        nm.notify(id, Notification.Builder(ctx, CH).setSmallIcon(R.drawable.ic_bell)
+        nm.notify(id, SahlNotif.apply(ctx, Notification.Builder(ctx, CH))
             .setContentTitle(title).setContentText(c.getString(R.string.try_again_q))
             .setAutoCancel(true).setTimeoutAfter(60 * 60_000L)
             .addAction(Notification.Action.Builder(null, c.getString(R.string.in_minutes, 10),
@@ -60,7 +60,7 @@ object Missed {
         val who = if (n.isNotBlank()) Lookup.caller(ctx, n).name ?: n else c.getString(R.string.private_number)
         val open = PendingIntent.getActivity(ctx, ID, Intent(ctx, MainActivity::class.java).putExtra("tab", 1)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val b = Notification.Builder(ctx, CH).setSmallIcon(R.drawable.ic_call_missed)
+        val b = SahlNotif.apply(ctx, Notification.Builder(ctx, CH))
             .setContentTitle(if (count > 1) c.getString(R.string.missed_n, count) else c.getString(R.string.missed_from, who))
             .setContentText(if (count > 1) c.getString(R.string.last_from, who) else c.getString(R.string.tap_to_see))
             .setContentIntent(open).setAutoCancel(true).setCategory(Notification.CATEGORY_MISSED_CALL)

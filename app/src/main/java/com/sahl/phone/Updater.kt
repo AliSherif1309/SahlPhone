@@ -47,7 +47,7 @@ object Updater {
             val nm = ctx.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(NotificationChannel("updates", c.getString(R.string.check_updates), NotificationManager.IMPORTANCE_DEFAULT))
             val open = PendingIntent.getActivity(ctx, 5, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-            nm.notify(500, Notification.Builder(ctx, "updates").setSmallIcon(R.drawable.ic_call)
+            nm.notify(500, SahlNotif.apply(ctx, Notification.Builder(ctx, "updates"))
                 .setContentTitle(c.getString(R.string.update_available, r.name))
                 .setContentText(c.getString(R.string.install_update))
                 .setContentIntent(open).setAutoCancel(true).build())

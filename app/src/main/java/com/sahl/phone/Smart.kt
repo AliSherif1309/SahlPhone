@@ -42,8 +42,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val call = PendingIntent.getActivity(ctx, number.hashCode(),
             Intent(ctx, CallActivity::class.java).putExtra("number", number).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        nm.notify(20_000 + (number.hashCode() and 0xffff), Notification.Builder(ctx, "reminders_chime")
-            .setSmallIcon(R.drawable.ic_bell)
+        nm.notify(20_000 + (number.hashCode() and 0xffff), SahlNotif.apply(ctx, Notification.Builder(ctx, "reminders_chime"))
             .setContentTitle(c.getString(R.string.call_back_title, name ?: number))
             .setContentText(c.getString(R.string.call_back_text))
             .setContentIntent(call).setAutoCancel(true)

@@ -117,7 +117,7 @@ object CallNotes {
             .putExtra("number", number).putExtra("addNote", true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val who = Lookup.caller(ctx, number).name ?: number
-        nm.notify(901, Notification.Builder(ctx, "notes").setSmallIcon(R.drawable.ic_note)
+        nm.notify(901, SahlNotif.apply(ctx, Notification.Builder(ctx, "notes"))
             .setContentTitle(c.getString(R.string.note_prompt_title, who))
             .setContentText(c.getString(R.string.note_prompt_text))
             .setContentIntent(open).setAutoCancel(true).setTimeoutAfter(15 * 60_000L).build())
