@@ -106,7 +106,7 @@ class PrayerMissedReceiver : BroadcastReceiver() {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         nm.createNotificationChannel(Sahl.chimeChannel(ctx, "reminders_chime", c.getString(R.string.reminders)))
         val names = numbers.values.map { Lookup.caller(ctx, it).name ?: it }
-        val b = Notification.Builder(ctx, "reminders_chime").setSmallIcon(R.drawable.ic_bell)
+        val b = SahlNotif.apply(ctx, Notification.Builder(ctx, "reminders_chime"))
             .setContentTitle(c.getString(R.string.prayer_missed_title, list.length(), prayer))
             .setContentText(names.joinToString(", "))
             .setAutoCancel(true)
@@ -193,7 +193,7 @@ class WeeklyReceiver : BroadcastReceiver() {
                 nm.createNotificationChannel(NotificationChannel("weekly", c.getString(R.string.weekly_title), NotificationManager.IMPORTANCE_LOW))
                 val text = c.getString(R.string.weekly_line, w.calls, (w.talk / 60).toInt()) +
                     (if (w.missedNotReturned.isNotEmpty()) " · " + c.getString(R.string.weekly_not_returned, w.missedNotReturned.size) else "")
-                nm.notify(851, Notification.Builder(ctx, "weekly").setSmallIcon(R.drawable.ic_history)
+                nm.notify(851, SahlNotif.apply(ctx, Notification.Builder(ctx, "weekly"))
                     .setContentTitle(c.getString(R.string.weekly_title)).setContentText(text).setAutoCancel(true)
                     .setContentIntent(PendingIntent.getActivity(ctx, 852, Intent(ctx, MainActivity::class.java).putExtra("tab", 1)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))

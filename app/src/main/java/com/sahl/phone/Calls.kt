@@ -229,8 +229,8 @@ object Notifs {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val ringing = call.st() == Call.STATE_RINGING
         val connectedAt = call.details.connectTimeMillis
-        val b = Notification.Builder(ctx, if (ringing) CH_IN else CH_ON)
-            .setSmallIcon(R.drawable.ic_call).setOngoing(true).setContentIntent(open)
+        val b = SahlNotif.apply(ctx, Notification.Builder(ctx, if (ringing) CH_IN else CH_ON))
+            .setOngoing(true).setContentIntent(open)
             .setCategory(Notification.CATEGORY_CALL).setContentTitle(who)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentText(c.getString(if (ringing) R.string.incoming else R.string.ongoing))
