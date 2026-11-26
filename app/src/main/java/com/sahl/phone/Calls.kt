@@ -98,6 +98,7 @@ object CallManager {
     val listeners = mutableSetOf<() -> Unit>()
     var service: SahlInCallService? = null
     var audio: CallAudioState? = null
+    var lastDisconnectCause: Int? = null
     private val main = Handler(Looper.getMainLooper())
 
     fun changed() = main.post { listeners.toList().forEach { it() }; service?.let { Notifs.update(it) } }
@@ -108,11 +109,13 @@ object CallManager {
     val callback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
             service?.let { Lookup.remember(it, call.number(), call.displayName()) }
+            if (state == Call.STATE_DISCONNECTED) lastDisconnectCause = call.details?.disconnectCause?.code
             if (calls.none { it.st() == Call.STATE_RINGING }) FlipSilence.stop()
             changed()
         }
         override fun onDetailsChanged(call: Call, details: Call.Details) {
             service?.let { Lookup.remember(it, call.number(), call.displayName()) }
+            if (call.st() == Call.STATE_DISCONNECTED) lastDisconnectCause = details.disconnectCause?.code
             changed()
         }
     }
@@ -129,6 +132,7 @@ object CallManager {
 class SahlInCallService : InCallService() {
     override fun onCallAdded(call: Call) {
         if (call.st() == Call.STATE_DISCONNECTED || call.st() == Call.STATE_DISCONNECTING) return
+        CallManager.lastDisconnectCause = null
         Lookup.remember(this, call.number(), call.displayName())
         CallManager.service = this
         CallManager.calls.add(call)
