@@ -201,7 +201,9 @@ class InCallActivity : SahlActivity() {
 
     @Deprecated("Back")
     override fun onBackPressed() {
-        if (padBox.visibility == View.VISIBLE) showPad(false) else @Suppress("DEPRECATION") super.onBackPressed()
+        if (padBox.visibility == View.VISIBLE) showPad(false)
+        else if (CallManager.primary() != null) moveTaskToBack(true)
+        else @Suppress("DEPRECATION") super.onBackPressed()
     }
 
     private fun pill(s: String) = text(s, 13f, white).apply {
