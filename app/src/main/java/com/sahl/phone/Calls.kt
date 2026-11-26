@@ -80,6 +80,10 @@ object Lookup {
         } catch (e: Exception) { }
     }
 
+    fun clearUnsaved() {
+        cache.entries.removeIf { !it.value.saved }
+    }
+
     fun clear() = cache.clear()
 }
 
