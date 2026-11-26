@@ -274,7 +274,8 @@ class InCallActivity : SahlActivity() {
         if (isFinishing || isDestroyed) return
         val call = CallManager.primary()
         if (call == null) {
-            statusTv.text = getString(R.string.ended)
+            val busy = CallManager.lastDisconnectCause == android.telecom.DisconnectCause.BUSY
+            statusTv.text = getString(if (busy) R.string.busy else R.string.ended)
             prox?.release()
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             main.removeCallbacks(finishTask)
