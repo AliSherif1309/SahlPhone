@@ -199,7 +199,8 @@ class SahlInCallService : InCallService() {
 
 /** Incoming / ongoing call notifications (full-screen on the lock screen). */
 object Notifs {
-    private const val ID = 77
+    private const val ID_IN = 77
+    private const val ID_ON = 78
     private const val CH_IN = "calls_ring"   // new channel id so the high-priority settings apply
     private const val CH_ON = "calls_ongoing"
 
@@ -207,13 +208,16 @@ object Notifs {
         Intent(c, CallActionReceiver::class.java).setAction(action), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
     fun cancel(ctx: Context) {
-        ctx.getSystemService(NotificationManager::class.java)?.cancel(ID)
+        ctx.getSystemService(NotificationManager::class.java)?.let {
+            it.cancel(ID_IN)
+            it.cancel(ID_ON)
+        }
     }
 
     fun update(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         val call = CallManager.primary()
-        if (call == null) { nm.cancel(ID); return }
+        if (call == null) { nm.cancel(ID_IN); nm.cancel(ID_ON); return }
         val c = Sahl.wrap(ctx)
         nm.createNotificationChannel(NotificationChannel(CH_IN, c.getString(R.string.incoming), NotificationManager.IMPORTANCE_HIGH).apply {
             setSound(null, null as AudioAttributes?)   // Android plays the ringtone itself
@@ -233,27 +237,47 @@ object Notifs {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val ringing = call.st() == Call.STATE_RINGING
         val connectedAt = call.details.connectTimeMillis
-        val b = SahlNotif.apply(ctx, Notification.Builder(ctx, if (ringing) CH_IN else CH_ON))
-            .setOngoing(true).setContentIntent(open)
-            .setCategory(Notification.CATEGORY_CALL).setContentTitle(who)
-            .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .setContentText(c.getString(if (ringing) R.string.incoming else R.string.ongoing))
-        if (!ringing && call.st() == Call.STATE_ACTIVE && connectedAt > 0) {
-            b.setWhen(connectedAt).setShowWhen(true).setUsesChronometer(true)
-        }
         val decline = pi(ctx, 2, "decline"); val answer = pi(ctx, 3, "answer"); val hang = pi(ctx, 4, "end")
-        if (ringing) b.setFullScreenIntent(open, true)
-        if (Build.VERSION.SDK_INT >= 31) {
-            val person = NPerson.Builder().setName(who).setImportant(true).build()
-            b.setStyle(if (ringing) Notification.CallStyle.forIncomingCall(person, decline, answer)
-                       else Notification.CallStyle.forOngoingCall(person, hang))
-        } else if (ringing) {
-            b.addAction(Notification.Action.Builder(null, c.getString(R.string.decline), decline).build())
-            b.addAction(Notification.Action.Builder(null, c.getString(R.string.answer), answer).build())
-        } else {
-            b.addAction(Notification.Action.Builder(null, c.getString(R.string.end), hang).build())
+
+        fun baseBuilder(channel: String): Notification.Builder {
+            val b = SahlNotif.apply(ctx, Notification.Builder(ctx, channel))
+                .setOngoing(true).setContentIntent(open)
+                .setCategory(Notification.CATEGORY_CALL).setContentTitle(who)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setContentText(c.getString(if (ringing) R.string.incoming else R.string.ongoing))
+            if (!ringing && call.st() == Call.STATE_ACTIVE && connectedAt > 0) {
+                b.setWhen(connectedAt).setShowWhen(true).setUsesChronometer(true)
+            }
+            return b
         }
-        try { nm.notify(ID, b.build()) } catch (e: Exception) { }
+
+        if (ringing) {
+            nm.cancel(ID_ON)
+            val b = baseBuilder(CH_IN).setFullScreenIntent(open, true)
+            if (Build.VERSION.SDK_INT >= 31) {
+                val person = NPerson.Builder().setName(who).setImportant(true).build()
+                b.setStyle(Notification.CallStyle.forIncomingCall(person, decline, answer))
+            } else {
+                b.addAction(Notification.Action.Builder(null, c.getString(R.string.decline), decline).build())
+                b.addAction(Notification.Action.Builder(null, c.getString(R.string.answer), answer).build())
+            }
+            try { nm.notify(ID_IN, b.build()) } catch (e: Exception) { }
+        } else {
+            nm.cancel(ID_IN)
+            val posted = if (Build.VERSION.SDK_INT >= 31) {
+                try {
+                    val person = NPerson.Builder().setName(who).setImportant(true).build()
+                    val b = baseBuilder(CH_ON).setStyle(Notification.CallStyle.forOngoingCall(person, hang))
+                    nm.notify(ID_ON, b.build())
+                    true
+                } catch (e: Exception) { false }
+            } else false
+            if (!posted) {
+                val b = baseBuilder(CH_ON)
+                    .addAction(Notification.Action.Builder(null, c.getString(R.string.end), hang).build())
+                try { nm.notify(ID_ON, b.build()) } catch (e: Exception) { }
+            }
+        }
     }
 }
 
