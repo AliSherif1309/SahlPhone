@@ -244,25 +244,28 @@ class MainActivity : SahlActivity() {
                 recents = cached
                 renderTabs()
                 if (tab == 1 && !blockedView) {
-                    if (refreshRecents != null) refreshRecents?.invoke() else show()
+                    if (refreshRecents != null) refreshRecents?.invoke(false) else show()
                 }
             }
         }
         Thread {
             // Recents first (that's what you look at), with every caller name looked up here — not while scrolling
             val r = try { Data.recents(this) } catch (e: Exception) { emptyList() }
-            for (n in r.map { it.number }.distinct()) if (n.isNotBlank()) Lookup.caller(this, n)
+            val prevSaved = r.map { it.number }.distinct().associateWith { Lookup.caller(this, it).saved }
+            Lookup.clearUnsaved()
+            for (n in prevSaved.keys) if (n.isNotBlank()) Lookup.caller(this, n)
             for (x in r) if (x.number.isNotBlank() && !x.name.isNullOrBlank() && Lookup.caller(this, x.number).name == null) {
                 Lookup.remember(this, x.number, x.name)
             }
+            val savedChanged = prevSaved.any { (n, was) -> n.isNotBlank() && was != Lookup.caller(this, n).saved }
             runOnUiThread {
                 val changed = r != recents
-                val visualChange = !sameRecents(r, recents)
+                val visualChange = !sameRecents(r, recents) || savedChanged
                 recents = r
                 if (missedCount(r) != renderedMissed) renderTabs()
                 if (tab == 1 && !blockedView) {
                     if (refreshRecents != null) {
-                        if (changed) refreshRecents?.invoke()
+                        if (changed || savedChanged) refreshRecents?.invoke(savedChanged)
                     } else {
                         show()
                     }
@@ -400,7 +403,7 @@ class MainActivity : SahlActivity() {
                 d.year, d.monthValue - 1, d.dayOfMonth).show()
         }
         box.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(dates) })
-        val (search, searchEt) = searchBox(getString(R.string.search_history)) { q -> recentQuery = q; refreshRecents?.invoke() }
+        val (search, searchEt) = searchBox(getString(R.string.search_history)) { q -> recentQuery = q; refreshRecents?.invoke(false) }
         if (recentQuery.isNotEmpty()) searchEt.setText(recentQuery)
         box.addView(search, LinearLayout.LayoutParams(-1, -2).apply { setMargins(px(16), 0, px(16), px(6)) })
         val lv = ListView(this).apply { divider = null; selector = android.graphics.drawable.ColorDrawable(0); clipToPadding = false; setPadding(0, 0, 0, px(12)) }
@@ -410,9 +413,9 @@ class MainActivity : SahlActivity() {
         content.addView(box)
         val adapter = RecentsAdapter(filteredRecents())
         lv.adapter = adapter
-        refreshRecents = {
+        refreshRecents = { force ->
             val next = filteredRecents()
-            val visualChange = !sameRecents(next, adapter.list)
+            val visualChange = force || !sameRecents(next, adapter.list)
             adapter.list = next
             if (visualChange) adapter.notifyDataSetChanged()
             week?.visibility = if (recentQuery.isBlank() && weekHasCalls) View.VISIBLE else View.GONE
@@ -420,7 +423,7 @@ class MainActivity : SahlActivity() {
         week?.visibility = if (recentQuery.isBlank() && weekHasCalls) View.VISIBLE else View.GONE
     }
 
-    private var refreshRecents: (() -> Unit)? = null
+    private var refreshRecents: ((Boolean) -> Unit)? = null
 
     /** Recents filtered by chip and by search (name, number or a note you wrote on a call). */
     private fun filteredRecents(): List<Recent> {
@@ -492,6 +495,7 @@ class MainActivity : SahlActivity() {
 
     /** "This week" card at the top of Recents. */
     private fun weekCard(): View {
+        weekHasCalls = false
         val box = LinearLayout(this).apply { setPaddingRelative(px(16), px(4), px(16), px(4)); visibility = View.GONE }
         val c = card().apply { background = round(col(R.color.tonal), 22f); elevation = 0f }
         box.addView(c, LinearLayout.LayoutParams(-1, -2))
