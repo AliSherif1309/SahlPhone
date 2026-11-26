@@ -305,7 +305,7 @@ class MainActivity : SahlActivity() {
         when (tab) { 0 -> keypad(); 1 -> recentsView(); else -> contactsView() }
     }
 
-    private fun call(n: String) { if (n.isNotBlank()) Dialer.call(this, n) }
+    private fun call(n: String, onPlaced: () -> Unit = {}) { if (n.isNotBlank()) Dialer.call(this, n, onPlaced = onPlaced) }
     private fun sms(n: String) = go(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(n))))
 
     // ---------- Keypad ----------
@@ -353,7 +353,7 @@ class MainActivity : SahlActivity() {
         actions.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         actions.addView(iconButton(R.drawable.ic_call, col(R.color.ok), 0xFFFFFFFF.toInt(), 64, 28) {
             if (typed.isEmpty()) { typed = recents.firstOrNull { r -> r.type == CallLog.Calls.OUTGOING_TYPE }?.number ?: ""; refreshPad() }
-            else { val n = typed; typed = ""; refreshPad(); call(n) }
+            else call(typed) { typed = ""; refreshPad() }
         }.apply { elevation = 4f * dp })
         val back = LinearLayout(this).apply { gravity = Gravity.CENTER }
         back.addView(iconButton(R.drawable.ic_backspace, 0, col(R.color.sub), 52, 22) { typed = typed.dropLast(1); refreshPad() }.apply {

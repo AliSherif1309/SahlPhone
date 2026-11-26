@@ -303,8 +303,8 @@ class CallActionReceiver : BroadcastReceiver() {
 /** Placing calls, with a SIM choice when the phone has two. */
 @SuppressLint("MissingPermission")
 object Dialer {
-    /** Places a call; [done] runs after the call is placed or the SIM choice is cancelled. */
-    fun call(a: Activity, number: String, done: () -> Unit = {}) {
+    /** Places a call; [onPlaced] runs only if the call is placed, [done] runs after placement or cancellation. */
+    fun call(a: Activity, number: String, done: () -> Unit = {}, onPlaced: () -> Unit = {}) {
         val n = number.trim()
         if (n.isEmpty()) { done(); return }
         val tm = a.getSystemService(TelecomManager::class.java)
@@ -314,18 +314,18 @@ object Dialer {
             val labels = accounts.map { h -> try { tm.getPhoneAccount(h)?.label?.toString() } catch (e: Exception) { null } ?: h.id }
             if (a is SahlActivity) {
                 val items = accounts.mapIndexed { i, h ->
-                    Triple(R.drawable.ic_call, labels[i]) { place(a, n, h); done() }
+                    Triple(R.drawable.ic_call, labels[i]) { place(a, n, h); onPlaced(); done() }
                 }
                 a.sheet(a.getString(R.string.choose_sim), items, onCancel = done)
             } else {
                 var picked = false
                 AlertDialog.Builder(a).setTitle(R.string.choose_sim)
-                    .setItems(labels.toTypedArray()) { _, i -> picked = true; place(a, n, accounts[i]); done() }
+                    .setItems(labels.toTypedArray()) { _, i -> picked = true; place(a, n, accounts[i]); onPlaced(); done() }
                     .setNegativeButton(R.string.cancel, null)
                     .setOnDismissListener { if (!picked) done() }
                     .show()
             }
-        } else { place(a, n, null); done() }
+        } else { place(a, n, null); onPlaced(); done() }
     }
 
     private fun place(a: Activity, n: String, acc: PhoneAccountHandle?) {
