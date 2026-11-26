@@ -397,9 +397,9 @@ class InCallActivity : SahlActivity() {
         if (list.isEmpty()) return
         val tm = getSystemService(TelecomManager::class.java)
         val labels = list.map { h -> try { tm.getPhoneAccount(h)?.label?.toString() } catch (e: Exception) { null } ?: h.id }
-        AlertDialog.Builder(this).setTitle(R.string.choose_sim)
-            .setItems(labels.toTypedArray()) { _, i -> call.phoneAccountSelected(list[i], false) }
-            .setOnCancelListener { call.disconnect() }
-            .show()
+        val items = list.mapIndexed { i, h ->
+            Triple(R.drawable.ic_call, labels[i]) { call.phoneAccountSelected(h, false) }
+        }
+        sheet(getString(R.string.choose_sim), items, onCancel = { call.disconnect() })
     }
 }
