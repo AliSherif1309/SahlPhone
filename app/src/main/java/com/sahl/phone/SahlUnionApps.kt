@@ -47,7 +47,7 @@ object SahlUnionApps {
         UnionApp(listOf("com.sahl.home"), "Theme", "الثيم", "SahlHome")
     )
 
-    fun strip(c: Context, textColor: Int): View {
+    fun strip(c: Context, textColor: Int = c.getColor(R.color.sub)): View {
         val pm = c.packageManager
         val d = c.resources.displayMetrics.density
         fun px(v: Int) = (v * d).toInt()
