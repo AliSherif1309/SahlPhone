@@ -308,12 +308,19 @@ object Dialer {
         val defaultAcc = try { tm.getDefaultOutgoingPhoneAccount("tel") } catch (e: Exception) { null }
         if (accounts.size > 1 && defaultAcc == null) {
             val labels = accounts.map { h -> try { tm.getPhoneAccount(h)?.label?.toString() } catch (e: Exception) { null } ?: h.id }
-            var picked = false
-            AlertDialog.Builder(a).setTitle(R.string.choose_sim)
-                .setItems(labels.toTypedArray()) { _, i -> picked = true; place(a, n, accounts[i]); done() }
-                .setNegativeButton(R.string.cancel, null)
-                .setOnDismissListener { if (!picked) done() }
-                .show()
+            if (a is SahlActivity) {
+                val items = accounts.mapIndexed { i, h ->
+                    Triple(R.drawable.ic_call, labels[i]) { place(a, n, h); done() }
+                }
+                a.sheet(a.getString(R.string.choose_sim), items, onCancel = done)
+            } else {
+                var picked = false
+                AlertDialog.Builder(a).setTitle(R.string.choose_sim)
+                    .setItems(labels.toTypedArray()) { _, i -> picked = true; place(a, n, accounts[i]); done() }
+                    .setNegativeButton(R.string.cancel, null)
+                    .setOnDismissListener { if (!picked) done() }
+                    .show()
+            }
         } else { place(a, n, null); done() }
     }
 

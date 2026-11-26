@@ -531,8 +531,9 @@ abstract class SahlActivity : Activity() {
     fun fab(res: Int, go: () -> Unit) = iconButton(res, col(R.color.emerald), 0xFFFFFFFF.toInt(), 58, 26, go).apply { elevation = 6f * dp }
 
     /** Bottom sheet with icon actions. Items: (icon, label, action). */
-    fun sheet(title: String?, items: List<Triple<Int, String, () -> Unit>>) {
+    fun sheet(title: String?, items: List<Triple<Int, String, () -> Unit>>, onCancel: () -> Unit = {}) {
         val d = android.app.Dialog(this)
+        var picked = false
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
@@ -549,12 +550,13 @@ abstract class SahlActivity : Activity() {
         for ((ic, label, go) in items) {
             val row = LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL; setPadding(px(16), px(14), px(16), px(14))
-                setOnClickListener { d.dismiss(); go() }
+                setOnClickListener { picked = true; d.dismiss(); go() }
             }.press(16f)
             row.addView(icon(ic, col(R.color.emerald), 22))
             row.addView(text(label, 16f).apply { setPadding(px(18), 0, 0, 0) })
             box.addView(row)
         }
+        d.setOnDismissListener { if (!picked) onCancel() }
         d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         d.setContentView(box)
         d.window?.let { w ->
