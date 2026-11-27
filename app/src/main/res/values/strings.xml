@@ -174,4 +174,6 @@
     <string name="sg_quiet">Favorites you haven’t called</string>
     <string name="sg_no_photo">No photo</string>
     <string name="sg_no_number">No number</string>
+    <string name="favorite">Add to favorites</string>
+    <string name="unfavorite">Remove from favorites</string>
 </resources>
