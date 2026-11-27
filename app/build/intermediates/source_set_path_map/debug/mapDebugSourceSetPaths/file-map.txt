@@ -1,7 +1,0 @@
-com.sahl.phone.app-pngs-0 D:\Sahl_Apps\SahlPhone\app\build\generated\res\pngs\debug
-com.sahl.phone.app-resValues-1 D:\Sahl_Apps\SahlPhone\app\build\generated\res\resValues\debug
-com.sahl.phone.app-packageDebugResources-2 D:\Sahl_Apps\SahlPhone\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
-com.sahl.phone.app-packageDebugResources-3 D:\Sahl_Apps\SahlPhone\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
-com.sahl.phone.app-debug-4 D:\Sahl_Apps\SahlPhone\app\build\intermediates\merged_res\debug\mergeDebugResources
-com.sahl.phone.app-debug-5 D:\Sahl_Apps\SahlPhone\app\src\debug\res
-com.sahl.phone.app-main-6 D:\Sahl_Apps\SahlPhone\app\src\main\res
