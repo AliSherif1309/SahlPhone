@@ -176,4 +176,6 @@
     <string name="sg_no_number">بدون رقم</string>
     <string name="favorite">إضافة للمفضلة</string>
     <string name="unfavorite">إزالة من المفضلة</string>
+    <string name="contact_btn">جهة الاتصال</string>
+    <string name="view_contact">عرض جهة الاتصال</string>
 </resources>

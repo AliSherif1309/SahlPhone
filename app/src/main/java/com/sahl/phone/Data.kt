@@ -130,6 +130,19 @@ object Data {
         ) > 0
     } catch (e: Exception) { false }
 
+    fun contactForNumber(c: Context, number: String): Pair<Long, String>? {
+        if (number.isBlank()) return null
+        return try {
+            c.contentResolver.query(
+                Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number)),
+                arrayOf(ContactsContract.PhoneLookup.CONTACT_ID, ContactsContract.PhoneLookup.LOOKUP_KEY),
+                null, null, null
+            )?.use {
+                if (it.moveToFirst()) it.getLong(0) to (it.getString(1) ?: "") else null
+            }
+        } catch (e: Exception) { null }
+    }
+
     fun recents(c: Context, limit: Int = 300): List<Recent> {
         val out = ArrayList<Recent>()
         c.contentResolver.query(CallLog.Calls.CONTENT_URI,

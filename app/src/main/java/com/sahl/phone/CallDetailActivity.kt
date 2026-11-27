@@ -18,13 +18,16 @@ import java.time.format.DateTimeFormatter
 /** Details of one number: who, where from, and every call with them. */
 class CallDetailActivity : SahlActivity() {
     private lateinit var number: String
+    private lateinit var headerSlot: FrameLayout
     private lateinit var body: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         number = intent.getStringExtra("number") ?: run { finish(); return }
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(col(R.color.bg)) }
-        root.addView(header("", true, listOf(R.drawable.ic_delete to { deleteAll() })))
+        headerSlot = FrameLayout(this)
+        headerSlot.addView(header("", true, listOf(R.drawable.ic_delete to { deleteAll() })))
+        root.addView(headerSlot)
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPaddingRelative(px(16), px(4), px(16), px(40)) }
         root.addView(ScrollView(this).apply { addView(body); isVerticalScrollBarEnabled = false }, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
@@ -32,7 +35,7 @@ class CallDetailActivity : SahlActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (last?.first?.saved == false) Lookup.clear()
+        Lookup.clear()
         load()
     }
 
@@ -42,6 +45,7 @@ class CallDetailActivity : SahlActivity() {
         Thread {
             var who = Lookup.caller(this, number)
             val facts = Facts.of(this, number)
+            val ref = Data.contactForNumber(this, number)
             val key = Norm.phoneKey(number)
             val rows = ArrayList<Row>()
             var cachedName: String? = null
@@ -62,13 +66,14 @@ class CallDetailActivity : SahlActivity() {
                 Lookup.remember(this, number, cachedName)
                 who = Lookup.caller(this, number)
             }
-            runOnUiThread { build(who, facts, rows) }
+            runOnUiThread { build(who, facts, rows, ref) }
         }.start()
     }
 
     private var dateFilter = 0          // 0 any · 1 today · 2 yesterday · 3 last 7 days · 4 last 30 days · 5 picked day
     private var pickedDay: LocalDate? = null
-    private var last: Triple<Caller, CallerFacts, List<Row>>? = null
+    private data class Loaded(val who: Caller, val facts: CallerFacts, val rows: List<Row>, val ref: Pair<Long, String>?)
+    private var last: Loaded? = null
 
     private fun inPeriod(t: Long): Boolean {
         val d = Instant.ofEpochMilli(t).atZone(ZoneId.systemDefault()).toLocalDate(); val today = LocalDate.now()
@@ -79,23 +84,44 @@ class CallDetailActivity : SahlActivity() {
         }
     }
 
-    private fun rebuild() { last?.let { build(it.first, it.second, it.third) } }
+    private fun rebuild() { last?.let { build(it.who, it.facts, it.rows, it.ref) } }
 
-    private fun build(who: Caller, facts: CallerFacts, allRows: List<Row>) {
-        last = Triple(who, facts, allRows)
+    private fun build(who: Caller, facts: CallerFacts, allRows: List<Row>, ref: Pair<Long, String>?) {
+        last = Loaded(who, facts, allRows, ref)
+        headerSlot.removeAllViews()
+        val headActions = if (ref != null) listOf(
+            R.drawable.ic_edit to { editContact(ref.first, ref.second) },
+            R.drawable.ic_delete to { deleteAll() }
+        ) else listOf(R.drawable.ic_delete to { deleteAll() })
+        headerSlot.addView(header("", true, headActions))
+
         val rows = allRows.filter { inPeriod(it.date) }
         body.removeAllViews()
         val name = who.name
         val saved = name != null && who.saved
+        val hero = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(px(16), px(4), px(16), px(4))
+            if (ref != null) {
+                setOnClickListener { openContact(ref.first, ref.second) }
+                press(18f)
+            }
+        }
         val (av, iv, letter) = avatar(104)
         av.background = oval(avatarColor(name ?: number))
         letter.text = if (name != null) Norm.section(name).let { if (it == "#") "" else it } else ""
         Thumbs.load(this, who.photo, iv, letter)
-        body.addView(av, LinearLayout.LayoutParams(px(104), px(104)).apply { gravity = Gravity.CENTER_HORIZONTAL })
-        body.addView(text(name ?: number, 24f, col(R.color.text), true).apply { gravity = Gravity.CENTER; setPadding(0, px(14), 0, 0) })
+        hero.addView(av, LinearLayout.LayoutParams(px(104), px(104)).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        hero.addView(text(name ?: number, 24f, col(R.color.text), true).apply { gravity = Gravity.CENTER; setPadding(0, px(14), 0, 0) })
+        body.addView(hero, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
         val sub = listOfNotNull(if (name != null) number else null, Countries.of(number, Sahl.countryCode(this), rtl),
             if (name != null && !saved) getString(R.string.not_saved) else null).joinToString("  ·  ")
-        if (sub.isNotEmpty()) body.addView(text(sub, 14f, col(R.color.sub)).apply { gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR })
+        if (sub.isNotEmpty()) body.addView(text(sub, 14f, col(R.color.sub)).apply {
+            gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR; setPadding(px(12), px(4), px(12), px(4))
+            setOnClickListener {
+                getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("number", number)); toast(R.string.copied)
+            }
+        }.press(12f), LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
         val totalTalk = rows.sumOf { it.duration }
         body.addView(text(getString(R.string.detail_facts, rows.size, dur(totalTalk)), 13f, col(R.color.emerald)).apply {
             gravity = Gravity.CENTER; setPadding(0, px(6), 0, 0)
@@ -112,9 +138,12 @@ class CallDetailActivity : SahlActivity() {
         action(R.drawable.ic_call, R.string.call) { Dialer.call(this, number) }
         action(R.drawable.ic_chat, R.string.message) { go(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(number)))) }
         action(R.drawable.ic_bell, R.string.remind_me) { remind() }
-        if (!saved) action(R.drawable.ic_person_add, R.string.add_contact) { addContact(name) }
-        else action(R.drawable.ic_copy, R.string.copy) {
-            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("number", number)); toast(R.string.copied)
+        when {
+            ref != null -> action(R.drawable.ic_people, R.string.contact_btn) { openContact(ref.first, ref.second) }
+            !saved -> action(R.drawable.ic_person_add, R.string.add_contact) { addContact(name) }
+            else -> action(R.drawable.ic_copy, R.string.copy) {
+                getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("number", number)); toast(R.string.copied)
+            }
         }
         body.addView(actions)
 
@@ -248,6 +277,24 @@ class CallDetailActivity : SahlActivity() {
                 }.start()
             }
             .setNegativeButton(R.string.cancel, null).show()
+    }
+
+    private fun packageInstalled(p: String) = try { packageManager.getPackageInfo(p, 0); true } catch (e: Exception) { false }
+
+    private fun openContact(id: Long, lookup: String) {
+        if (packageInstalled("com.sahl.contacts")) {
+            go(Intent("com.sahl.contacts.action.OPEN").setPackage("com.sahl.contacts").putExtra("id", id))
+            return
+        }
+        go(Intent(Intent.ACTION_VIEW, ContactsContract.Contacts.getLookupUri(id, lookup)))
+    }
+
+    private fun editContact(id: Long, lookup: String) {
+        if (packageInstalled("com.sahl.contacts")) {
+            go(Intent("com.sahl.contacts.action.EDIT").setPackage("com.sahl.contacts").putExtra("id", id))
+            return
+        }
+        go(Intent(Intent.ACTION_EDIT, ContactsContract.Contacts.getLookupUri(id, lookup)))
     }
 
     private fun go(i: Intent) { try { startActivity(i) } catch (e: Exception) { } }
