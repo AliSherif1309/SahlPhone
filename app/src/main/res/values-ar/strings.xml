@@ -174,4 +174,6 @@
     <string name="sg_quiet">مفضلة لم تتصل بها</string>
     <string name="sg_no_photo">بدون صورة</string>
     <string name="sg_no_number">بدون رقم</string>
+    <string name="favorite">إضافة للمفضلة</string>
+    <string name="unfavorite">إزالة من المفضلة</string>
 </resources>

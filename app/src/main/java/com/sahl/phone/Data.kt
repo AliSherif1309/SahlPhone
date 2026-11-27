@@ -122,6 +122,14 @@ object Data {
         out
     } catch (e: Exception) { emptySet() }
 
+    fun setStar(c: Context, id: Long, on: Boolean): Boolean = try {
+        c.contentResolver.update(
+            Uri.parse("${Sahl.CONTACTS_UNION}/star/$id"),
+            ContentValues().apply { put("starred", if (on) 1 else 0) },
+            null, null
+        ) > 0
+    } catch (e: Exception) { false }
+
     fun recents(c: Context, limit: Int = 300): List<Recent> {
         val out = ArrayList<Recent>()
         c.contentResolver.query(CallLog.Calls.CONTENT_URI,

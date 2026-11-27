@@ -1,0 +1,45 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.sahl.phone.app-mergeDebugResources-2:/values-night-v8/values-night-v8.xml",
+            "map": [
+                {
+                    "source": "D:\\Sahl_Apps\\SahlPhone\\app\\src\\main\\res\\values-night\\colors.xml",
+                    "from": {
+                        "startLines": "4,7,11,1,2,3,9,12,10,6,5,8",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "148,265,430,17,60,108,346,472,386,226,186,305",
+                        "endColumns": "36,38,40,41,46,38,38,36,42,37,38,39",
+                        "endOffsets": "180,299,466,54,102,142,380,504,424,259,220,340"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6,7,8,9,10,11,12,13",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,92,131,172,214,261,300,339,376,419,457,496",
+                        "endColumns": "36,38,40,41,46,38,38,36,42,37,38,39",
+                        "endOffsets": "87,126,167,209,256,295,334,371,414,452,491,531"
+                    }
+                },
+                {
+                    "source": "D:\\Sahl_Apps\\SahlPhone\\app\\src\\main\\res\\values-night\\themes.xml",
+                    "from": {
+                        "startLines": "1",
+                        "startColumns": "4",
+                        "startOffsets": "17",
+                        "endLines": "6",
+                        "endColumns": "12",
+                        "endOffsets": "361"
+                    },
+                    "to": {
+                        "startLines": "14",
+                        "startColumns": "4",
+                        "startOffsets": "536",
+                        "endLines": "19",
+                        "endColumns": "12",
+                        "endOffsets": "875"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -284,7 +284,7 @@ class MainActivity : SahlActivity() {
             val hid = Data.hiddenLookups(this)
             val g = Guard.log(this, 100)
             runOnUiThread {
-                val peopleChanged = ppl != people || grp != groups || mem != members || hid != hiddenLookups
+                val peopleChanged = ppl != people || grp != groups || mem != members || bd != bdayIds || hid != hiddenLookups
                 val stoppedChanged = g != stopped
                 contacts = c; people = ppl; groups = grp; members = mem; bdayIds = bd; hiddenLookups = hid; stopped = g
                 if (groupFilter != null && !groupFilter!!.startsWith("*") && !groups.containsKey(groupFilter)) groupFilter = null
@@ -634,6 +634,19 @@ class MainActivity : SahlActivity() {
         }
     }
 
+    private fun addContact() {
+        go(Intent(Intent.ACTION_INSERT).setType(ContactsContract.Contacts.CONTENT_TYPE)
+            .apply { if (packageInstalled("com.sahl.contacts")) setPackage("com.sahl.contacts") })
+    }
+
+    private fun editContact(p: Person) {
+        if (packageInstalled("com.sahl.contacts")) {
+            go(Intent("com.sahl.contacts.action.EDIT").setPackage("com.sahl.contacts").putExtra("id", p.id))
+            return
+        }
+        go(Intent(Intent.ACTION_EDIT, ContactsContract.Contacts.getLookupUri(p.id, p.lookup)))
+    }
+
     private fun contactActions(p: Person) {
         val items = ArrayList<Triple<Int, String, () -> Unit>>()
         if (p.numbers.isNotEmpty()) {
@@ -647,23 +660,34 @@ class MainActivity : SahlActivity() {
                 }
             })
         }
-        items.add(Triple(R.drawable.ic_edit, getString(R.string.edit_contact)) {
-            go(Intent(Intent.ACTION_EDIT, ContactsContract.Contacts.getLookupUri(p.id, p.lookup)))
-        })
+        if (packageInstalled("com.sahl.contacts")) {
+            items.add(Triple(if (p.starred) R.drawable.ic_star else R.drawable.ic_star_border,
+                getString(if (p.starred) R.string.unfavorite else R.string.favorite)) {
+                Thread { if (Data.setStar(this, p.id, !p.starred)) runOnUiThread { load() } }.start()
+            })
+        }
+        items.add(Triple(R.drawable.ic_edit, getString(R.string.edit_contact)) { editContact(p) })
         items.add(Triple(R.drawable.ic_share, getString(R.string.share)) { shareContact(p.lookup) })
         sheet(p.name, items)
     }
 
     private fun contactsView() {
+        val container = FrameLayout(this)
+        val fabParams = FrameLayout.LayoutParams(px(58), px(58), Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, px(22), px(22)) }
         val visibleAll = people.filter { it.lookup !in hiddenLookups }
-        if (visibleAll.isEmpty()) { content.addView(empty(R.drawable.ic_people, R.string.no_contacts)); return }
+        if (visibleAll.isEmpty()) {
+            container.addView(empty(R.drawable.ic_people, R.string.no_contacts))
+            container.addView(fab(R.drawable.ic_add) { addContact() }, fabParams)
+            content.addView(container)
+            return
+        }
 
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val chips = LinearLayout(this).apply { setPadding(px(12), px(4), px(12), px(4)) }
         val body = FrameLayout(this)
         val lv = ListView(this).apply {
             divider = null; clipToPadding = false; selector = android.graphics.drawable.ColorDrawable(0)
-            setPadding(0, 0, 0, px(24)); isVerticalScrollBarEnabled = false
+            setPadding(0, 0, 0, px(96)); isVerticalScrollBarEnabled = false
         }
         val top = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         lv.addHeaderView(top, null, false)
@@ -681,7 +705,7 @@ class MainActivity : SahlActivity() {
         }
         body.addView(lv, FrameLayout.LayoutParams(-1, -1))
         body.addView(emptyBox, FrameLayout.LayoutParams(-1, -1))
-        body.addView(index, FrameLayout.LayoutParams(px(26), -1, Gravity.END).apply { topMargin = px(8); bottomMargin = px(16) })
+        body.addView(index, FrameLayout.LayoutParams(px(26), -1, Gravity.END).apply { topMargin = px(8); bottomMargin = px(96) })
         body.addView(bubble, FrameLayout.LayoutParams(px(76), px(76), Gravity.CENTER))
 
         val talkedKeys = recents.mapNotNull { it.number.takeIf(String::isNotBlank)?.let(Norm::phoneKey) }.toSet()
@@ -808,7 +832,9 @@ class MainActivity : SahlActivity() {
         box.addView(search, LinearLayout.LayoutParams(-1, -2).apply { setMargins(px(16), px(2), px(16), px(6)) })
         box.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(chips) })
         box.addView(body, LinearLayout.LayoutParams(-1, 0, 1f))
-        content.addView(box)
+        container.addView(box, FrameLayout.LayoutParams(-1, -1))
+        container.addView(fab(R.drawable.ic_add) { addContact() }, fabParams)
+        content.addView(container)
         filter()
     }
 
