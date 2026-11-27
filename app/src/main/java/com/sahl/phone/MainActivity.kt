@@ -570,17 +570,38 @@ class MainActivity : SahlActivity() {
 
     private fun recentMenu(r: Recent, name: String?, saved: Boolean) {
         if (r.number.isBlank()) return
+        val key = Norm.phoneKey(r.number)
+        val person = people.firstOrNull { p -> p.numbers.any { Norm.phoneKey(it) == key } }
+        val ref = if (person != null) person.id to person.lookup else if (saved) Data.contactForNumber(this, r.number) else null
         val items = mutableListOf(
             Triple(R.drawable.ic_history, getString(R.string.call_details)) {
                 startActivity(Intent(this, CallDetailActivity::class.java).putExtra("number", r.number))
-            },
+            }
+        )
+        if (ref != null) {
+            items.add(Triple(R.drawable.ic_people, getString(R.string.view_contact)) {
+                if (packageInstalled("com.sahl.contacts")) {
+                    go(Intent("com.sahl.contacts.action.OPEN").setPackage("com.sahl.contacts").putExtra("id", ref.first))
+                } else {
+                    go(Intent(Intent.ACTION_VIEW, ContactsContract.Contacts.getLookupUri(ref.first, ref.second)))
+                }
+            })
+            items.add(Triple(R.drawable.ic_edit, getString(R.string.edit_contact)) {
+                if (packageInstalled("com.sahl.contacts")) {
+                    go(Intent("com.sahl.contacts.action.EDIT").setPackage("com.sahl.contacts").putExtra("id", ref.first))
+                } else {
+                    go(Intent(Intent.ACTION_EDIT, ContactsContract.Contacts.getLookupUri(ref.first, ref.second)))
+                }
+            })
+        }
+        items.addAll(listOf(
             Triple(R.drawable.ic_call, getString(R.string.call)) { call(r.number) },
             Triple(R.drawable.ic_chat, getString(R.string.message)) { sms(r.number) },
             Triple(R.drawable.ic_bell, getString(R.string.remind_me)) { remind(r.number, name) },
             Triple(R.drawable.ic_copy, getString(R.string.copy)) {
                 getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("number", r.number)); toast(R.string.copied)
             }
-        )
+        ))
         if (!saved) items.add(Triple(R.drawable.ic_person_add, getString(R.string.add_contact)) {
             go(Intent(Intent.ACTION_INSERT).setType(ContactsContract.Contacts.CONTENT_TYPE)
                 .putExtra(ContactsContract.Intents.Insert.PHONE, r.number).apply {
