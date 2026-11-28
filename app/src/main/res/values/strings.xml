@@ -178,4 +178,5 @@
     <string name="unfavorite">Remove from favorites</string>
     <string name="contact_btn">Contact</string>
     <string name="view_contact">View contact</string>
+    <string name="one_call_fact">1 call · last %1$s</string>
 </resources>
