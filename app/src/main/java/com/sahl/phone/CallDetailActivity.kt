@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.CallLog
 import android.provider.ContactsContract
@@ -101,6 +102,7 @@ class CallDetailActivity : SahlActivity() {
         val saved = name != null && who.saved
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+            clipChildren = false; clipToPadding = false
             setPadding(px(16), px(4), px(16), px(4))
             if (ref != null) {
                 setOnClickListener { openContact(ref.first, ref.second) }
@@ -112,12 +114,16 @@ class CallDetailActivity : SahlActivity() {
         letter.text = if (name != null) Norm.section(name).let { if (it == "#") "" else it } else ""
         Thumbs.load(this, who.photo, iv, letter)
         hero.addView(av, LinearLayout.LayoutParams(px(104), px(104)).apply { gravity = Gravity.CENTER_HORIZONTAL })
-        hero.addView(text(name ?: number, 24f, col(R.color.text), true).apply { gravity = Gravity.CENTER; setPadding(0, px(14), 0, 0) })
-        body.addView(hero, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        hero.addView(text(name ?: number, 24f, col(R.color.text), true).apply {
+            gravity = Gravity.CENTER; setPadding(0, px(14), 0, px(10))
+            setLineSpacing(px(6).toFloat(), 1f)
+            if (Build.VERSION.SDK_INT >= 28) isFallbackLineSpacing = true
+        }, LinearLayout.LayoutParams(-1, -2))
+        body.addView(hero, LinearLayout.LayoutParams(-1, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
         val sub = listOfNotNull(if (name != null) number else null, Countries.of(number, Sahl.countryCode(this), rtl),
             if (name != null && !saved) getString(R.string.not_saved) else null).joinToString("  ·  ")
         if (sub.isNotEmpty()) body.addView(text(sub, 14f, col(R.color.sub)).apply {
-            gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR; setPadding(px(12), px(4), px(12), px(4))
+            gravity = Gravity.CENTER; textDirection = View.TEXT_DIRECTION_LTR; setPadding(px(12), px(2), px(12), px(4))
             setOnClickListener {
                 getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("number", number)); toast(R.string.copied)
             }
