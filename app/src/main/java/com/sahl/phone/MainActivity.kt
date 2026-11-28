@@ -243,6 +243,7 @@ class MainActivity : SahlActivity() {
             if (cached.isNotEmpty()) {
                 recents = cached
                 renderTabs()
+                if (tab == 0) refreshPad()
                 if (tab == 1 && !blockedView) {
                     if (refreshRecents != null) refreshRecents?.invoke(false) else show()
                 }
@@ -308,6 +309,14 @@ class MainActivity : SahlActivity() {
     private fun call(n: String, onPlaced: () -> Unit = {}) { if (n.isNotBlank()) Dialer.call(this, n, onPlaced = onPlaced) }
     private fun sms(n: String) = go(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(n))))
 
+    private fun addContactWithNumber(number: String, name: String? = null) {
+        go(Intent(Intent.ACTION_INSERT).setType(ContactsContract.Contacts.CONTENT_TYPE)
+            .putExtra(ContactsContract.Intents.Insert.PHONE, number).apply {
+                if (!name.isNullOrBlank()) putExtra(ContactsContract.Intents.Insert.NAME, name)
+                if (packageInstalled("com.sahl.contacts")) setPackage("com.sahl.contacts")
+            })
+    }
+
     // ---------- Keypad ----------
     private fun keypad() {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -321,16 +330,53 @@ class MainActivity : SahlActivity() {
                 true
             }
         }
-        val hint = text("", 13f, col(R.color.sub)).apply { gravity = Gravity.CENTER; setPadding(0, 0, 0, px(2)) }
+        val hint = text("", 13f, col(R.color.sub)).apply { gravity = Gravity.CENTER; setPadding(px(12), px(2), px(12), px(4)) }
+        var exactRecentName: String? = null
+        val addBtn = iconButton(R.drawable.ic_person_add, col(R.color.tonal), col(R.color.emerald), 52, 22) {
+            if (typed.isNotBlank()) addContactWithNumber(typed, exactRecentName)
+        }.apply { visibility = View.INVISIBLE }
         padRefresh = {
             numTv.text = typed
             val q = Norm.digits(typed)
-            val list = if (q.isEmpty()) emptyList() else contacts.filter { e ->
+            val savedMatches = if (q.isEmpty()) emptyList() else contacts.filter { e ->
                 e.digits.contains(q) || e.t9.split(' ').any { w -> w.startsWith(q) } || e.t9.replace(" ", "").startsWith(q)
             }.take(30)
-            matches.adapter = EntryAdapter(list)
-            val exact = list.firstOrNull { Norm.phoneKey(it.number) == Norm.phoneKey(typed) && q.length >= 7 }
-            hint.text = exact?.name ?: (if (typed.isNotBlank()) Countries.of(typed, Sahl.countryCode(this), rtl) ?: "" else "")
+            val recentMatches = if (q.isEmpty()) emptyList() else {
+                val savedKeys = contacts.map { Norm.phoneKey(it.number) }.toHashSet()
+                val seenRecent = HashSet<String>()
+                recents.filter { r ->
+                    if (r.number.isBlank()) return@filter false
+                    val k = Norm.phoneKey(r.number)
+                    k !in savedKeys && Norm.digits(r.number).contains(q) && seenRecent.add(k)
+                }.take(10)
+            }
+            matches.adapter = PadMatchAdapter(savedMatches, recentMatches)
+            val exact = savedMatches.firstOrNull { Norm.phoneKey(it.number) == Norm.phoneKey(typed) && q.length >= 7 }
+            val exactRecents = if (exact == null && q.length >= 7) {
+                recents.filter { it.number.isNotBlank() && Norm.phoneKey(it.number) == Norm.phoneKey(typed) }
+            } else emptyList()
+            exactRecentName = exactRecents.firstNotNullOfOrNull { Lookup.caller(this, it.number).name ?: it.name }
+            addBtn.visibility = if (typed.isNotBlank() && exact == null) View.VISIBLE else View.INVISIBLE
+            when {
+                exact != null -> {
+                    hint.text = exact.name
+                    hint.setTextColor(col(R.color.sub))
+                    hint.setOnClickListener(null); hint.isClickable = false
+                }
+                exactRecents.isNotEmpty() -> {
+                    val total = exactRecents.sumOf { it.count }
+                    val latest = exactRecents.maxOf { it.date }
+                    hint.text = if (total == 1) getString(R.string.one_call_fact, dayLabel(latest))
+                        else getString(R.string.call_facts, total, dayLabel(latest))
+                    hint.setTextColor(col(R.color.emerald))
+                    hint.setOnClickListener { startActivity(Intent(this, CallDetailActivity::class.java).putExtra("number", typed)) }
+                }
+                else -> {
+                    hint.text = if (typed.isNotBlank()) Countries.of(typed, Sahl.countryCode(this), rtl) ?: "" else ""
+                    hint.setTextColor(col(R.color.sub))
+                    hint.setOnClickListener(null); hint.isClickable = false
+                }
+            }
         }
         box.addView(numTv); box.addView(hint)
         val pad = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_LTR; gravity = Gravity.CENTER_HORIZONTAL }
@@ -350,7 +396,9 @@ class MainActivity : SahlActivity() {
             pad.addView(r)
         }
         val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(px(24), px(6), px(24), px(10)); layoutDirection = View.LAYOUT_DIRECTION_LTR }
-        actions.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        val left = LinearLayout(this).apply { gravity = Gravity.CENTER }
+        left.addView(addBtn)
+        actions.addView(left, LinearLayout.LayoutParams(0, -2, 1f))
         actions.addView(iconButton(R.drawable.ic_call, col(R.color.ok), 0xFFFFFFFF.toInt(), 64, 28) {
             if (typed.isEmpty()) { typed = recents.firstOrNull { r -> r.type == CallLog.Calls.OUTGOING_TYPE }?.number ?: ""; refreshPad() }
             else call(typed) { typed = ""; refreshPad() }
@@ -915,6 +963,50 @@ class MainActivity : SahlActivity() {
     }
 
     // ---------- Shared rows ----------
+    private inner class PadMatchAdapter(val saved: List<Entry>, val unsaved: List<Recent>) : BaseAdapter() {
+        override fun getCount() = saved.size + unsaved.size
+        override fun getItem(p: Int): Any = if (p < saved.size) saved[p] else unsaved[p - saved.size]
+        override fun getItemId(p: Int) = p.toLong()
+        override fun getView(p: Int, cv: View?, parent: ViewGroup): View {
+            if (p < saved.size) {
+                val e = saved[p]
+                val row = personRow(e.name, e.number, col(R.color.text), e.name, e.photo, if (e.starred) R.drawable.ic_star else 0, col(R.color.gold))
+                row.setOnClickListener { call(e.number) }
+                row.setOnLongClickListener {
+                    sheet(e.name, listOf(
+                        Triple(R.drawable.ic_call, getString(R.string.call)) { call(e.number) },
+                        Triple(R.drawable.ic_chat, getString(R.string.message)) { sms(e.number) },
+                        Triple(R.drawable.ic_bell, getString(R.string.remind_me)) { remind(e.number, e.name) },
+                        Triple(R.drawable.ic_copy, getString(R.string.copy)) {
+                            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("number", e.number)); toast(R.string.copied)
+                        }
+                    )); true
+                }
+                return swipe(row, e.number)
+            }
+            val r = unsaved[p - saved.size]
+            val who = Lookup.caller(this@MainActivity, r.number)
+            val fetchedName = who.name ?: r.name
+            val unanswered = r.type == CallLog.Calls.OUTGOING_TYPE && r.duration == 0L
+            val (ic, color) = when (r.type) {
+                CallLog.Calls.OUTGOING_TYPE -> R.drawable.ic_arrow_out to col(if (unanswered) R.color.gold else R.color.emerald)
+                CallLog.Calls.BLOCKED_TYPE -> R.drawable.ic_block to col(R.color.sub)
+                CallLog.Calls.MISSED_TYPE, CallLog.Calls.REJECTED_TYPE -> R.drawable.ic_call_missed to col(R.color.danger)
+                else -> R.drawable.ic_arrow_in to col(R.color.ok)
+            }
+            val title = fetchedName ?: r.number
+            val subText = (if (fetchedName != null) r.number + "  ·  " else "") +
+                dayLabel(r.date) + " " + time(r.date) + "  ·  " + getString(R.string.not_saved)
+            val row = personRow(title, subText, col(R.color.text), fetchedName ?: "#", null, ic, color)
+            row.addView(iconButton(R.drawable.ic_person_add, 0, col(R.color.emerald), 40, 20) {
+                addContactWithNumber(r.number, fetchedName)
+            })
+            row.setOnClickListener { startActivity(Intent(this@MainActivity, CallDetailActivity::class.java).putExtra("number", r.number)) }
+            row.setOnLongClickListener { recentMenu(r, fetchedName, false); true }
+            return swipe(row, r.number)
+        }
+    }
+
     private inner class EntryAdapter(val list: List<Entry>) : BaseAdapter() {
         override fun getCount() = list.size
         override fun getItem(p: Int) = list[p]
